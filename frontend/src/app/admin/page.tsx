@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { ShiftOptimizeRequest, ShiftOptimizeResponse } from '@/lib/types';
 import { DEMO_IZAKAYA_DATA } from '@/lib/mock-data';
 import { loadSavedRequest, loadSavedResponse, saveRequest, saveResponse } from '@/lib/storage';
 import { requestShiftOptimization } from '@/lib/api';
+import { AdminNavbar } from '@/components/navigation/AdminNavbar';
 import { RoiSummaryCard } from '@/components/summary/RoiSummaryCard';
 import { ShiftMatrix } from '@/components/schedule/ShiftMatrix';
 import { ExportModal } from '@/components/schedule/ExportModal';
@@ -51,8 +51,15 @@ export default function AdminPage() {
     }
   };
 
+  const handleResponseChange = (updatedResponse: ShiftOptimizeResponse) => {
+    setResponse(updatedResponse);
+    saveResponse(updatedResponse);
+  };
+
   return (
     <main className="container" style={{ paddingBottom: '3rem' }}>
+      <AdminNavbar />
+
       <header
         style={{
           display: 'flex',
@@ -60,31 +67,28 @@ export default function AdminPage() {
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: '1rem',
-          margin: '1.5rem 0',
+          marginBottom: '1.25rem',
         }}
       >
         <div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>
-            🏢 FoodShift 管理者ダッシュボード
+          <h1 style={{ fontSize: '1.375rem', fontWeight: 700 }}>
+            🏢 AIシフト自動作成 ＆ 最適化
           </h1>
-          <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-            居酒屋渋谷店 | 期間: {requestData.period.start_date} から {requestData.period.days}日間 ({requestData.staff_members.length}名登録中)
+          <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+            期間: {requestData.period.start_date} から {requestData.period.days}日間 ({requestData.staff_members.length}名登録中 | {requestData.shifts.length}シフト枠)
           </p>
         </div>
 
         <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <Link href="/submit" className="btn btn-secondary">
-            📱 スタッフ希望入力 (/submit)
-          </Link>
           <button
             onClick={handleOptimize}
             disabled={loading}
             className="btn btn-primary"
             data-testid="btn-optimize"
-            style={{ minWidth: '180px' }}
+            style={{ minWidth: '190px' }}
           >
             {loading ? (
-              <span data-testid="loading-spinner">⚙ 計算中...</span>
+              <span data-testid="loading-spinner">⚙ AI計算中...</span>
             ) : (
               '⚡ シフトを最適化する'
             )}
@@ -96,14 +100,15 @@ export default function AdminPage() {
       {coldStartWarning && (
         <div
           data-testid="cold-start-banner"
+          className="unfilled-pulse"
           style={{
             backgroundColor: 'var(--warning-bg)',
             color: '#854d0e',
-            border: '1px solid #fde047',
-            borderRadius: '6px',
+            border: '1px solid var(--warning-border)',
+            borderRadius: 'var(--radius-sm)',
             padding: '1rem 1.25rem',
             marginBottom: '1.5rem',
-            animation: 'pulse 2s infinite',
+            fontWeight: 600,
           }}
         >
           ⚡ AI最適化サーバーをスリープから復帰中です... (無料枠の仕様上、初回のみ約30〜50秒かかります。そのままお待ちください)
@@ -117,8 +122,8 @@ export default function AdminPage() {
           style={{
             backgroundColor: 'var(--danger-bg)',
             color: 'var(--danger)',
-            border: '1px solid #fca5a5',
-            borderRadius: '6px',
+            border: '1px solid var(--danger-border)',
+            borderRadius: 'var(--radius-sm)',
             padding: '1rem 1.25rem',
             marginBottom: '1.5rem',
             display: 'flex',
@@ -131,8 +136,7 @@ export default function AdminPage() {
           </div>
           <button
             onClick={handleOptimize}
-            className="btn btn-secondary"
-            style={{ minHeight: '36px', padding: '0.25rem 0.75rem' }}
+            className="btn btn-secondary btn-sm"
           >
             再試行
           </button>
@@ -146,7 +150,11 @@ export default function AdminPage() {
       <ExportModal request={requestData} response={response} />
 
       {/* シフトマトリクス表 */}
-      <ShiftMatrix request={requestData} response={response} />
+      <ShiftMatrix
+        request={requestData}
+        response={response}
+        onResponseChange={handleResponseChange}
+      />
     </main>
   );
 }

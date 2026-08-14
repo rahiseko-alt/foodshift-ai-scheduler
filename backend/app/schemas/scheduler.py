@@ -14,6 +14,7 @@ class ShiftSchema(BaseModel):
     start: str = Field(..., pattern=r"^\d{2}:\d{2}$", description="開始時刻 (HH:MM)")
     end: str = Field(..., pattern=r"^\d{2}:\d{2}$", description="終了時刻 (HH:MM)")
     hours: float = Field(..., ge=0.5, le=24.0, description="勤務時間数")
+    break_minutes: int = Field(default=0, ge=0, le=180, description="法定休憩時間(分)")
     is_late_night: bool = Field(default=False, description="22:00以降にかかるシフトか否か")
 
 
@@ -28,6 +29,12 @@ class StaffMemberSchema(BaseModel):
         default=30.0, ge=0.0, le=168.0, description="週間目標労働時間"
     )
     max_consecutive_days: int = Field(default=5, ge=1, le=7, description="最大連続勤務日数")
+    ng_staff_ids: list[str] = Field(default_factory=list, description="同時勤務NGスタッフIDリスト")
+    preferred_partner_ids: list[str] = Field(
+        default_factory=list, description="優先ペアスタッフIDリスト"
+    )
+    min_days_per_period: int = Field(default=0, ge=0, description="期間内最小出勤日数")
+    max_days_per_period: int = Field(default=31, ge=0, le=31, description="期間内最大出勤日数")
 
 
 class ShiftRequirementSchema(BaseModel):
@@ -46,12 +53,24 @@ class StaffAvailabilitySchema(BaseModel):
     )
 
 
+class FixedAssignmentSchema(BaseModel):
+    staff_id: str = Field(..., min_length=1, max_length=50, description="スタッフID")
+    day_offset: int = Field(..., ge=0, le=30, description="開始日からの日数オフセット")
+    shift_id: str = Field(..., min_length=1, max_length=50, description="シフトID")
+
+
 class ShiftOptimizeRequest(BaseModel):
     period: PeriodSchema
     shifts: list[ShiftSchema] = Field(..., min_length=1, max_length=20)
     staff_members: list[StaffMemberSchema] = Field(..., min_length=1, max_length=50)
     requirements: list[ShiftRequirementSchema] = Field(..., max_length=500)
     availabilities: list[StaffAvailabilitySchema] = Field(default_factory=list, max_length=1000)
+    min_interval_hours: float = Field(
+        default=11.0, ge=0.0, le=24.0, description="勤務間インターバル最小時間(h)"
+    )
+    fixed_assignments: list[FixedAssignmentSchema] = Field(
+        default_factory=list, description="Warm Start用固定割当 (staff_id, day_offset, shift_id)"
+    )
 
 
 # レスポンススキーマ
@@ -83,9 +102,14 @@ class UnfilledRequirementSchema(BaseModel):
 class ScheduleSummarySchema(BaseModel):
     total_labor_cost: int
     total_work_hours: float
+    total_break_hours: float = Field(default=0.0, description="合計休憩時間(h)")
+    deep_night_extra_cost: int = Field(default=0, description="深夜割増人件費(円)")
     wants_fulfillment_rate: float
     max_staff_day_difference: int
     unfilled_requirements: list[UnfilledRequirementSchema] = Field(default_factory=list)
+    bottleneck_constraints: list[str] = Field(
+        default_factory=list, description="Infeasible時等の制約ボトルネック分析"
+    )
 
 
 class ShiftOptimizeResponse(BaseModel):

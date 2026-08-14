@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from ortools.sat.python import cp_model
 
 from app.engine.constraints import build_optimization_model
+from app.engine.time_utils import calculate_late_night_hours
 from app.schemas.scheduler import (
     AssignedStaffSchema,
     ScheduledShiftSlotSchema,
@@ -14,6 +15,107 @@ from app.schemas.scheduler import (
 )
 
 
+def _analyze_infeasible_bottlenecks(request: ShiftOptimizeRequest) -> list[str]:
+    """Infeasible発生時のボトルネック要因を静的解析して提示する。"""
+    bottlenecks: list[str] = []
+    num_staff = len(request.staff_members)
+
+    # 1. 出勤日数上限のチェック
+    max_days_total = sum(st.max_days_per_period for st in request.staff_members)
+
+    total_shifts_required = sum(req.min_staff for req in request.requirements)
+    if total_shifts_required > max_days_total:
+        bottlenecks.append(
+            f"スタッフ全員の最大出勤日数合計 ({max_days_total}日) が"
+            f"総必要シフト数 ({total_shifts_required}枠) を下回っています。"
+        )
+
+    # 2. 1日あたりの必要人数とスタッフ総数
+    req_by_day: dict[int, int] = {}
+    for req in request.requirements:
+        req_by_day[req.day_offset] = req_by_day.get(req.day_offset, 0) + req.min_staff
+
+    for d, count in req_by_day.items():
+        if count > num_staff:
+            bottlenecks.append(
+                f"Day {d} の総必要人数 ({count}名) が"
+                f"登録スタッフ総数 ({num_staff}名) を超過しています（1日1シフト制約）。"
+            )
+
+    # 3. NGペア競合チェック
+    ng_pairs = []
+    for i, st1 in enumerate(request.staff_members):
+        for st2 in request.staff_members[i + 1 :]:
+            if st2.id in st1.ng_staff_ids or st1.id in st2.ng_staff_ids:
+                ng_pairs.append((st1.name, st2.name))
+    if ng_pairs:
+        bottlenecks.append(f"NGペア制約が設定されています: {ng_pairs[:3]}")
+
+    # 4. 固定割当の重複チェック
+    fixed_by_staff_day: dict[tuple[str, int], list[str]] = {}
+    for fa in request.fixed_assignments:
+        key = (fa.staff_id, fa.day_offset)
+        fixed_by_staff_day.setdefault(key, []).append(fa.shift_id)
+
+    for (staff_id, day_offset), shifts in fixed_by_staff_day.items():
+        if len(shifts) > 1:
+            bottlenecks.append(
+                f"スタッフ {staff_id} が Day {day_offset} に"
+                f"複数の固定シフト ({shifts}) に重複指定されています。"
+            )
+
+    if not bottlenecks:
+        bottlenecks.append(
+            "Hard制約（勤務間インターバル・連続勤務上限・出勤日数上下限等）"
+            "の組み合わせにより解が存在しません。"
+        )
+
+    return bottlenecks
+
+
+def _analyze_shortage_bottlenecks(
+    request: ShiftOptimizeRequest,
+    unfilled_list: list[UnfilledRequirementSchema],
+) -> list[str]:
+    """人員不足（FEASIBLE_WITH_SHORTAGE）発生時の要因分析テキストを生成する。"""
+    bottlenecks: list[str] = []
+    shift_map = {s.id: s for s in request.shifts}
+
+    for unfilled in unfilled_list:
+        shift = shift_map.get(unfilled.shift_id)
+        shift_name = shift.name if shift else unfilled.shift_id
+        d = unfilled.day_offset
+
+        # 該当日に不可(unavailable)を出しているスタッフ数
+        unavail_count = sum(
+            1
+            for a in request.availabilities
+            if a.day_offset == d and a.shift_id == unfilled.shift_id and a.status == "unavailable"
+        )
+
+        # 深夜シフトの場合、未成年者の除外
+        minor_excluded = 0
+        if shift and (
+            shift.is_late_night or calculate_late_night_hours(shift.start, shift.end) > 0
+        ):
+            minor_excluded = sum(1 for st in request.staff_members if st.is_minor)
+
+        reasons = []
+        if unavail_count > 0:
+            reasons.append(f"不可希望 {unavail_count}名")
+        if minor_excluded > 0:
+            reasons.append(f"年少者深夜除外 {minor_excluded}名")
+
+        reason_str = " / ".join(reasons) if reasons else "連続勤務・インターバル上限等による制約"
+        bottlenecks.append(
+            f"{unfilled.date} [{shift_name}]: 不足 {unfilled.shortage}名 "
+            f"(必要 {unfilled.required_count}名 / 割当 {unfilled.assigned_count}名) - "
+            f"要因: {reason_str}"
+        )
+
+    return bottlenecks
+
+
 def solve_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeResponse:
     """OR-Tools CP-SAT ソルバーを実行し、シフト最適化結果を生成する。"""
     start_time = time.time()
@@ -22,7 +124,7 @@ def solve_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeResponse
     )
 
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 5.0
+    solver.parameters.max_time_in_seconds = 4.0
     solver.parameters.num_search_workers = 4
     solver.parameters.relative_gap_limit = 0.05  # 5%ギャップ以内で高速終了
 
@@ -30,15 +132,19 @@ def solve_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeResponse
     elapsed_ms = int((time.time() - start_time) * 1000)
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        bottlenecks = _analyze_infeasible_bottlenecks(request)
         return ShiftOptimizeResponse(
             status="INFEASIBLE",
             solve_time_ms=elapsed_ms,
             summary=ScheduleSummarySchema(
                 total_labor_cost=0,
                 total_work_hours=0.0,
+                total_break_hours=0.0,
+                deep_night_extra_cost=0,
                 wants_fulfillment_rate=0.0,
                 max_staff_day_difference=0,
                 unfilled_requirements=[],
+                bottleneck_constraints=bottlenecks,
             ),
             schedule=[],
         )
@@ -53,8 +159,10 @@ def solve_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeResponse
     avail_map = {(a.staff_id, a.day_offset, a.shift_id): a.status for a in request.availabilities}
 
     schedule_slots: list[ScheduledShiftSlotSchema] = []
-    total_labor_cost = 0
+    total_base_labor_cost = 0
+    total_deep_night_extra_cost = 0
     total_work_hours = 0.0
+    total_break_hours = 0.0
     total_wants = 0
     fulfilled_wants = 0
     staff_days_count = [0] * num_staff
@@ -70,6 +178,10 @@ def solve_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeResponse
 
         for s in range(num_shifts):
             shift = request.shifts[s]
+            net_shift_hours = max(0.0, shift.hours - shift.break_minutes / 60.0)
+            break_hours = shift.break_minutes / 60.0
+            late_hours = calculate_late_night_hours(shift.start, shift.end)
+
             assigned_staff_list: list[AssignedStaffSchema] = []
 
             for e in range(num_staff):
@@ -88,8 +200,16 @@ def solve_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeResponse
                             is_want_fulfilled=is_want,
                         )
                     )
-                    total_labor_cost += int(staff.hourly_wage * shift.hours)
-                    total_work_hours += shift.hours
+
+                    # 基本人件費（実働時間 × 時給）
+                    base_cost = int(round(staff.hourly_wage * net_shift_hours))
+                    # 深夜割増人件費（22:00〜05:00にかかる時間 × 時給 × 0.25）
+                    night_extra = int(round(staff.hourly_wage * 0.25 * late_hours))
+
+                    total_base_labor_cost += base_cost
+                    total_deep_night_extra_cost += night_extra
+                    total_work_hours += net_shift_hours
+                    total_break_hours += break_hours
                     staff_days_count[e] += 1
 
             # 不足チェック (スラック変数)
@@ -122,15 +242,24 @@ def solve_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeResponse
     day_diff = (max(staff_days_count) - min(staff_days_count)) if staff_days_count else 0
     final_status = "FEASIBLE_WITH_SHORTAGE" if unfilled_list else "OPTIMAL"
 
+    bottleneck_constraints = []
+    if unfilled_list:
+        bottleneck_constraints = _analyze_shortage_bottlenecks(request, unfilled_list)
+
+    total_labor_cost = total_base_labor_cost + total_deep_night_extra_cost
+
     return ShiftOptimizeResponse(
         status=final_status,
         solve_time_ms=elapsed_ms,
         summary=ScheduleSummarySchema(
             total_labor_cost=total_labor_cost,
             total_work_hours=round(total_work_hours, 1),
+            total_break_hours=round(total_break_hours, 1),
+            deep_night_extra_cost=total_deep_night_extra_cost,
             wants_fulfillment_rate=round(wants_rate, 2),
             max_staff_day_difference=day_diff,
             unfilled_requirements=unfilled_list,
+            bottleneck_constraints=bottleneck_constraints,
         ),
         schedule=schedule_slots,
     )

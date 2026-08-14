@@ -1,7 +1,11 @@
 from ortools.sat.python import cp_model
 
 from app.engine.helpers import add_consecutive_days_constraint
-from app.engine.time_utils import is_shift_late_night
+from app.engine.time_utils import (
+    calculate_interval_hours,
+    calculate_late_night_hours,
+    is_shift_late_night,
+)
 from app.schemas.scheduler import (
     ShiftOptimizeRequest,
 )
@@ -22,6 +26,9 @@ def build_optimization_model(
     num_staff = len(request.staff_members)
     num_shifts = len(request.shifts)
     num_days = request.period.days
+
+    shift_id_to_idx = {s.id: idx for idx, s in enumerate(request.shifts)}
+    staff_id_to_idx = {st.id: idx for idx, st in enumerate(request.staff_members)}
 
     # 1. 決定変数
     # work[e, s, d]: スタッフ e が 日 d に シフト s に入るか (Bool)
@@ -58,23 +65,80 @@ def build_optimization_model(
         works_per_day = [day_worked[e_idx, d] for d in range(num_days)]
         add_consecutive_days_constraint(model, works_per_day, staff.max_consecutive_days)
 
-    # 4. Hard制約: 週間最大労働時間 (各週7日ブロックでの労働時間合計)
-    shift_hours = [int(round(s.hours * 10)) for s in request.shifts]
+    # 4. Hard制約: 期間内出勤日数上下限 (min_days_per_period / max_days_per_period)
+    for e_idx, staff in enumerate(request.staff_members):
+        total_days_worked = sum(day_worked[e_idx, d] for d in range(num_days))
+        if staff.min_days_per_period > 0:
+            effective_min = min(staff.min_days_per_period, num_days)
+            model.Add(total_days_worked >= effective_min)
+        if staff.max_days_per_period < 31:
+            model.Add(total_days_worked <= staff.max_days_per_period)
+
+    # 5. Hard制約: 勤務間インターバル制約 (min_interval_hours)
+    # 前日シフト s1 終了〜翌日シフト s2 開始までの時間が min_interval_hours 未満なら同時に配置不可
+    for s1_idx, s1 in enumerate(request.shifts):
+        for s2_idx, s2 in enumerate(request.shifts):
+            interval = calculate_interval_hours(s1.end, s2.start)
+            if interval < request.min_interval_hours:
+                for e_idx in range(num_staff):
+                    for d in range(num_days - 1):
+                        model.Add(work[e_idx, s1_idx, d] + work[e_idx, s2_idx, d + 1] <= 1)
+
+    # 6. Hard制約: NGペア制約 (同時勤務NG)
+    for e1_idx in range(num_staff):
+        for e2_idx in range(e1_idx + 1, num_staff):
+            st1 = request.staff_members[e1_idx]
+            st2 = request.staff_members[e2_idx]
+            is_ng = (st2.id in st1.ng_staff_ids) or (st1.id in st2.ng_staff_ids)
+            if is_ng:
+                for s in range(num_shifts):
+                    for d in range(num_days):
+                        model.Add(work[e1_idx, s, d] + work[e2_idx, s, d] <= 1)
+
+    # 7. Soft制約: GOODペア制約 (優先ペア同時出勤ボーナス)
+    for e1_idx in range(num_staff):
+        for e2_idx in range(e1_idx + 1, num_staff):
+            st1 = request.staff_members[e1_idx]
+            st2 = request.staff_members[e2_idx]
+            is_good = (st2.id in st1.preferred_partner_ids) or (st1.id in st2.preferred_partner_ids)
+            if is_good:
+                for s in range(num_shifts):
+                    for d in range(num_days):
+                        pair_var = model.NewBoolVar(f"good_pair_e{e1_idx}_e{e2_idx}_s{s}_d{d}")
+                        model.Add(pair_var <= work[e1_idx, s, d])
+                        model.Add(pair_var <= work[e2_idx, s, d])
+                        model.Add(pair_var >= work[e1_idx, s, d] + work[e2_idx, s, d] - 1)
+                        obj_vars.append(pair_var)
+                        obj_coeffs.append(-30)  # ペア同時出勤ボーナス (負のコスト)
+
+    # 8. Hard制約: Warm Start / 固定割当 (fixed_assignments)
+    for fa in request.fixed_assignments:
+        if (
+            fa.staff_id in staff_id_to_idx
+            and fa.shift_id in shift_id_to_idx
+            and fa.day_offset < num_days
+        ):
+            e_idx = staff_id_to_idx[fa.staff_id]
+            s_idx = shift_id_to_idx[fa.shift_id]
+            model.Add(work[e_idx, s_idx, fa.day_offset] == 1)
+
+    # 9. Hard制約: 週間最大労働時間 (休憩時間を差し引いた実働時間で各週7日ブロックでの合計)
+    shift_net_hours = [
+        int(round(max(0.0, s.hours - s.break_minutes / 60.0) * 10)) for s in request.shifts
+    ]
     for e_idx, staff in enumerate(request.staff_members):
         max_scaled = int(round(staff.max_weekly_hours * 10))
         # 7日ごとのブロック制約
         for start_d in range(0, max(1, num_days - 6), 7):
             window_days = range(start_d, min(num_days, start_d + 7))
             hours_expr = sum(
-                shift_hours[s] * work[e_idx, s, d] for s in range(num_shifts) for d in window_days
+                shift_net_hours[s] * work[e_idx, s, d]
+                for s in range(num_shifts)
+                for d in window_days
             )
             model.Add(hours_expr <= max_scaled)
 
-    # 5. 必要人数制約 (スラック変数による緩和付き)
-    # requirements を (day_offset, shift_id) でマップ化
-    shift_id_to_idx = {s.id: idx for idx, s in enumerate(request.shifts)}
-    staff_id_to_idx = {st.id: idx for idx, st in enumerate(request.staff_members)}
-
+    # 10. 必要人数制約 (スラック変数による緩和付き)
     req_map: dict[tuple[int, int], int] = {}
     role_req_map: dict[tuple[int, int], dict[str, int]] = {}
     for req in request.requirements:
@@ -88,7 +152,6 @@ def build_optimization_model(
         for s in range(num_shifts):
             required_count = req_map.get((d, s), 0)
             if required_count > 0:
-                # 該当スロットの出勤スタッフ合計
                 assigned_sum = sum(work[e, s, d] for e in range(num_staff))
                 under_var = model.NewIntVar(0, required_count, f"under_d{d}_s{s}")
                 over_var = model.NewIntVar(0, num_staff, f"over_d{d}_s{s}")
@@ -104,7 +167,7 @@ def build_optimization_model(
                 obj_vars.append(over_var)
                 obj_coeffs.append(10)
 
-    # 6. Hard制約: 必須ロール要件 (例: kitchen_leader >= 1)
+    # 11. Hard制約: 必須ロール要件 (例: kitchen_leader >= 1)
     for (d, s), required_roles in role_req_map.items():
         for role_name, min_role_count in required_roles.items():
             capable_staff = [
@@ -112,13 +175,12 @@ def build_optimization_model(
             ]
             if capable_staff:
                 role_assigned = sum(work[e, s, d] for e in capable_staff)
-                # ロール不足用のスラック変数
                 role_under = model.NewIntVar(0, min_role_count, f"role_under_d{d}_s{s}_{role_name}")
                 model.Add(role_assigned + role_under >= min_role_count)
                 obj_vars.append(role_under)
                 obj_coeffs.append(8000)  # ロール不足ペナルティ
 
-    # 7. スタッフ希望 (unavailable: Hard制約, want: Soft制約)
+    # 12. スタッフ希望 (unavailable: Hard制約, want: Soft制約)
     for avail in request.availabilities:
         if (
             avail.staff_id in staff_id_to_idx
@@ -130,24 +192,24 @@ def build_optimization_model(
             d = avail.day_offset
 
             if avail.status == "unavailable":
-                # 不可希望は Hard 制約 (出勤割当を 0 に固定)
                 model.Add(work[e_idx, s_idx, d] == 0)
             elif avail.status == "want":
-                # 希望が叶わなかったらペナルティ (Not() が 1 のとき +50)
                 obj_vars.append(work[e_idx, s_idx, d].Not())
-                obj_coeffs.append(50)
+                obj_coeffs.append(300)
 
-    # 8. Soft制約: 人件費最小化 (時給 × 勤務時間)
+    # 13. Soft制約: 人件費最小化 (実働時間 × 時給 + 深夜割増)
     for e in range(num_staff):
         wage = request.staff_members[e].hourly_wage
         for s in range(num_shifts):
-            hours = request.shifts[s].hours
-            cost = int(wage * hours)
+            shift = request.shifts[s]
+            net_hours = max(0.0, shift.hours - shift.break_minutes / 60.0)
+            late_hours = calculate_late_night_hours(shift.start, shift.end)
+            cost = int(wage * net_hours + wage * 0.25 * late_hours)
             for d in range(num_days):
                 obj_vars.append(work[e, s, d])
-                obj_coeffs.append(cost // 100)  # コスト重みスケール
+                obj_coeffs.append(cost // 100)
 
-    # 9. 目的関数の集約
+    # 14. 目的関数の集約
     if obj_vars:
         model.Minimize(
             cp_model.LinearExpr.Sum([v * c for v, c in zip(obj_vars, obj_coeffs, strict=False)])

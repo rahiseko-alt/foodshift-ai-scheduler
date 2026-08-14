@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AvailabilityStatus, ShiftOptimizeRequest, ShiftOptimizeResponse } from '@/lib/types';
 import { loadSavedRequest, loadSavedResponse, saveRequest } from '@/lib/storage';
+import { getDateInfo } from '@/lib/date-utils';
 
 export default function SubmitPage() {
   const [requestData, setRequestData] = useState<ShiftOptimizeRequest | null>(null);
@@ -91,28 +92,47 @@ export default function SubmitPage() {
       )
     : [];
 
+  // 年収の壁計算
+  const ytd = currentStaff?.annual_earnings_ytd || 0;
+  const taxWall = currentStaff?.tax_wall;
+  const remainingBudget = taxWall ? Math.max(0, taxWall - ytd) : 0;
+  const progressPercent = taxWall ? Math.min(100, Math.round((ytd / taxWall) * 100)) : 0;
+
   return (
     <main
       className="container"
-      style={{ maxWidth: '480px', padding: '1rem', minHeight: '100dvh' }}
+      style={{ maxWidth: '520px', padding: '1rem 0.75rem', minHeight: '100dvh' }}
     >
-      <header style={{ marginBottom: '1.25rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <header
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '1rem',
+          paddingBottom: '0.75rem',
+          borderBottom: '1px solid var(--border)',
+        }}
+      >
+        <div>
           <h1 style={{ fontSize: '1.25rem', fontWeight: 700 }}>📱 シフト希望提出</h1>
-          <Link href="/admin" style={{ fontSize: '0.8125rem', color: 'var(--primary)' }}>
-            管理者画面へ
-          </Link>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            期間: {requestData.period.start_date} から {days}日間
+          </p>
         </div>
-        <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-          期間: {requestData.period.start_date} から {days}日間
-        </p>
+        <Link
+          href="/admin"
+          className="btn btn-secondary btn-sm"
+          style={{ fontSize: '0.75rem' }}
+        >
+          🏢 店長画面へ
+        </Link>
       </header>
 
       {/* スタッフ選択 */}
-      <div className="card" style={{ marginBottom: '1.25rem' }}>
+      <div className="card" style={{ marginBottom: '1rem', padding: '1rem' }}>
         <label
           htmlFor="staff-select"
-          style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.5rem' }}
+          style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.4rem' }}
         >
           あなたの名前を選択してください
         </label>
@@ -121,14 +141,8 @@ export default function SubmitPage() {
           data-testid="select-staff"
           value={selectedStaffId}
           onChange={(e) => setSelectedStaffId(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '0.625rem',
-            fontSize: '1rem',
-            borderRadius: '6px',
-            border: '1px solid var(--border-dark)',
-            minHeight: '44px',
-          }}
+          className="form-select"
+          style={{ fontSize: '0.9375rem', minHeight: '44px', fontWeight: 600 }}
         >
           {requestData.staff_members.map((s) => (
             <option key={s.id} value={s.id}>
@@ -136,22 +150,81 @@ export default function SubmitPage() {
             </option>
           ))}
         </select>
+
+        {/* 年収の壁（103万/130万）インジケーター */}
+        {taxWall && (
+          <div
+            style={{
+              marginTop: '0.75rem',
+              padding: '0.625rem 0.75rem',
+              borderRadius: 'var(--radius-sm)',
+              backgroundColor: '#f8fafc',
+              border: '1px solid var(--border)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '0.75rem',
+                marginBottom: '0.35rem',
+              }}
+            >
+              <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>
+                💰 年収の壁（{(taxWall / 10000).toFixed(0)}万円）管理
+              </span>
+              <span style={{ color: progressPercent > 90 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                残り ¥{remainingBudget.toLocaleString()} ({progressPercent}%)
+              </span>
+            </div>
+
+            {/* プログレスバー */}
+            <div
+              style={{
+                height: '8px',
+                backgroundColor: '#e2e8f0',
+                borderRadius: '9999px',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  height: '100%',
+                  width: `${progressPercent}%`,
+                  backgroundColor:
+                    progressPercent > 90
+                      ? 'var(--danger)'
+                      : progressPercent > 75
+                      ? 'var(--warning)'
+                      : 'var(--success)',
+                  borderRadius: '9999px',
+                  transition: 'width 0.3s ease',
+                }}
+              />
+            </div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+              累計: ¥{ytd.toLocaleString()} / 上限: ¥{taxWall.toLocaleString()}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* 希望入力カレンダー (スマホ用) */}
+      {/* 希望入力カレンダー (スマホ用: 30タップ以内完結) */}
       <form onSubmit={handleSubmit}>
-        <div className="card" style={{ marginBottom: '1.25rem', padding: '0.75rem' }}>
+        <div className="card" style={{ marginBottom: '1rem', padding: '0.75rem' }}>
           <div
             style={{
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
               marginBottom: '0.75rem',
-              fontSize: '0.8125rem',
+              fontSize: '0.75rem',
               color: 'var(--text-muted)',
+              borderBottom: '1px solid var(--border)',
+              paddingBottom: '0.5rem',
             }}
           >
-            <span>マスをタップして切替:</span>
+            <span>枠タップで切替:</span>
             <span>
               <strong style={{ color: 'var(--success)' }}>◎ 希望</strong> /{' '}
               <strong style={{ color: 'var(--danger)' }}>✕ 不可</strong> / － 通常
@@ -159,80 +232,109 @@ export default function SubmitPage() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {Array.from({ length: days }, (_, d) => (
-              <div
-                key={d}
-                style={{
-                  border: '1px solid var(--border)',
-                  borderRadius: '6px',
-                  padding: '0.5rem',
-                  backgroundColor: '#ffffff',
-                }}
-              >
-                <div style={{ fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.375rem' }}>
-                  Day {d + 1}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.375rem' }}>
-                  {shifts.map((s) => {
-                    const isMinorLate = currentStaff?.is_minor && (s.is_late_night || s.id === 'late_night');
-                    const key = `${d}_${s.id}`;
-                    const status = availabilities[key] || 'available';
+            {Array.from({ length: days }, (_, d) => {
+              const dateInfo = getDateInfo(requestData.period.start_date, d);
+              const headerColor = dateInfo.isSunday
+                ? 'var(--danger)'
+                : dateInfo.isSaturday
+                ? 'var(--primary)'
+                : 'var(--text-main)';
 
-                    return (
-                      <button
-                        type="button"
-                        key={s.id}
-                        disabled={isMinorLate}
-                        onClick={() => handleToggleStatus(d, s.id)}
-                        data-testid={`btn-slot-${d}-${s.id}`}
-                        style={{
-                          minHeight: '44px',
-                          padding: '0.25rem',
-                          borderRadius: '4px',
-                          border: '1px solid',
-                          borderColor:
-                            status === 'want'
-                              ? 'var(--success)'
+              return (
+                <div
+                  key={d}
+                  style={{
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '0.5rem',
+                    backgroundColor: dateInfo.isSunday || dateInfo.isSaturday ? '#fbfcfe' : '#ffffff',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      fontSize: '0.8125rem',
+                      fontWeight: 700,
+                      marginBottom: '0.35rem',
+                      color: headerColor,
+                    }}
+                  >
+                    <span>📅 {dateInfo.dateFormatted}</span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>
+                      Day {d + 1}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: `repeat(${shifts.length}, 1fr)`, gap: '0.35rem' }}>
+                    {shifts.map((s) => {
+                      const isMinorLate =
+                        currentStaff?.is_minor && (s.is_late_night || s.id === 'late_night');
+                      const key = `${d}_${s.id}`;
+                      const status = availabilities[key] || 'available';
+
+                      return (
+                        <button
+                          type="button"
+                          key={s.id}
+                          disabled={isMinorLate}
+                          onClick={() => handleToggleStatus(d, s.id)}
+                          data-testid={`btn-slot-${d}-${s.id}`}
+                          style={{
+                            minHeight: '44px',
+                            padding: '0.25rem 0.15rem',
+                            borderRadius: 'var(--radius-sm)',
+                            border: '1px solid',
+                            borderColor:
+                              status === 'want'
+                                ? 'var(--success)'
+                                : status === 'unavailable'
+                                ? 'var(--danger)'
+                                : 'var(--border)',
+                            backgroundColor:
+                              status === 'want'
+                                ? 'var(--success-bg)'
+                                : status === 'unavailable'
+                                ? 'var(--danger-bg)'
+                                : isMinorLate
+                                ? '#f1f5f9'
+                                : '#ffffff',
+                            color:
+                              status === 'want'
+                                ? 'var(--success)'
+                                : status === 'unavailable'
+                                ? 'var(--danger)'
+                                : isMinorLate
+                                ? '#94a3b8'
+                                : 'var(--text-main)',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            cursor: isMinorLate ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          <div style={{ fontSize: '0.7rem' }}>{s.name.slice(0, 4)}</div>
+                          <div style={{ fontWeight: 700, marginTop: '2px' }}>
+                            {isMinorLate
+                              ? '深夜禁止'
+                              : status === 'want'
+                              ? '◎ 希望'
                               : status === 'unavailable'
-                              ? 'var(--danger)'
-                              : 'var(--border)',
-                          backgroundColor:
-                            status === 'want'
-                              ? 'var(--success-bg)'
-                              : status === 'unavailable'
-                              ? 'var(--danger-bg)'
-                              : isMinorLate
-                              ? '#f1f5f9'
-                              : '#ffffff',
-                          color:
-                            status === 'want'
-                              ? 'var(--success)'
-                              : status === 'unavailable'
-                              ? 'var(--danger)'
-                              : isMinorLate
-                              ? '#94a3b8'
-                              : 'var(--text-main)',
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
-                          cursor: isMinorLate ? 'not-allowed' : 'pointer',
-                        }}
-                      >
-                        <div>{s.name}</div>
-                        <div>
-                          {isMinorLate
-                            ? '深夜禁止'
-                            : status === 'want'
-                            ? '◎ 希望'
-                            : status === 'unavailable'
-                            ? '✕ 不可'
-                            : '－'}
-                        </div>
-                      </button>
-                    );
-                  })}
+                              ? '✕ 不可'
+                              : '－'}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -240,7 +342,7 @@ export default function SubmitPage() {
           type="submit"
           className="btn btn-primary"
           data-testid="btn-submit-availability"
-          style={{ width: '100%', fontSize: '1rem' }}
+          style={{ width: '100%', fontSize: '1rem', minHeight: '46px' }}
         >
           シフト希望を提出する
         </button>
@@ -249,13 +351,15 @@ export default function SubmitPage() {
           <div
             data-testid="submit-success-banner"
             style={{
-              marginTop: '1rem',
+              marginTop: '0.75rem',
               padding: '0.75rem',
               backgroundColor: 'var(--success-bg)',
               color: 'var(--success)',
-              borderRadius: '6px',
+              border: '1px solid var(--success-border)',
+              borderRadius: 'var(--radius-sm)',
               textAlign: 'center',
               fontWeight: 600,
+              fontSize: '0.875rem',
             }}
           >
             ✓ 希望を保存しました！
@@ -265,12 +369,12 @@ export default function SubmitPage() {
 
       {/* 確定シフト確認エリア */}
       {response && (
-        <div className="card" style={{ marginTop: '1.5rem' }} data-testid="confirmed-shift-section">
-          <h2 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.75rem' }}>
+        <div className="card" style={{ marginTop: '1.25rem' }} data-testid="confirmed-shift-section">
+          <h2 style={{ fontSize: '0.9375rem', fontWeight: 700, marginBottom: '0.75rem' }}>
             📅 あなたの確定シフト ({currentStaff?.name})
           </h2>
           {myConfirmedShifts.length === 0 ? (
-            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
               現在確定している出勤シフトはありません。
             </p>
           ) : (
@@ -278,6 +382,7 @@ export default function SubmitPage() {
               {myConfirmedShifts.map((slot) => {
                 const shiftObj = shifts.find((s) => s.id === slot.shift_id);
                 const assigned = slot.assigned_staff.find((st) => st.id === selectedStaffId);
+                const dateInfo = getDateInfo(requestData.period.start_date, slot.day_offset);
 
                 return (
                   <li
@@ -288,19 +393,22 @@ export default function SubmitPage() {
                       alignItems: 'center',
                       padding: '0.5rem 0',
                       borderBottom: '1px solid var(--border)',
-                      fontSize: '0.875rem',
+                      fontSize: '0.8125rem',
                     }}
                   >
                     <span>
-                      📅 {slot.date} ({shiftObj?.name} {shiftObj?.start}-{shiftObj?.end})
+                      📅 <strong>{dateInfo.dateFormatted}</strong> ({shiftObj?.name}{' '}
+                      {shiftObj?.start}-{shiftObj?.end})
                     </span>
                     <span
                       style={{
-                        padding: '0.125rem 0.5rem',
-                        borderRadius: '4px',
-                        fontSize: '0.75rem',
+                        padding: '0.15rem 0.5rem',
+                        borderRadius: '9999px',
+                        fontSize: '0.7rem',
                         fontWeight: 600,
-                        backgroundColor: assigned?.is_want_fulfilled ? 'var(--success-bg)' : 'var(--warning-bg)',
+                        backgroundColor: assigned?.is_want_fulfilled
+                          ? 'var(--success-bg)'
+                          : 'var(--warning-bg)',
                         color: assigned?.is_want_fulfilled ? 'var(--success)' : '#854d0e',
                       }}
                     >

@@ -14,6 +14,8 @@ export const DEMO_IZAKAYA_DATA: ShiftOptimizeRequest = {
       end: '15:00',
       hours: 5.0,
       is_late_night: false,
+      break_minutes: 0,
+      min_interval_hours: 11,
     },
     {
       id: 'dinner',
@@ -22,6 +24,8 @@ export const DEMO_IZAKAYA_DATA: ShiftOptimizeRequest = {
       end: '22:00',
       hours: 5.0,
       is_late_night: false,
+      break_minutes: 45,
+      min_interval_hours: 11,
     },
     {
       id: 'late_night',
@@ -30,6 +34,8 @@ export const DEMO_IZAKAYA_DATA: ShiftOptimizeRequest = {
       end: '24:30',
       hours: 3.0,
       is_late_night: true,
+      break_minutes: 0,
+      min_interval_hours: 11,
     },
   ],
   staff_members: [
@@ -42,6 +48,9 @@ export const DEMO_IZAKAYA_DATA: ShiftOptimizeRequest = {
       max_weekly_hours: 45.0,
       target_weekly_hours: 40.0,
       max_consecutive_days: 6,
+      min_days_per_period: 8,
+      max_days_per_period: 12,
+      annual_earnings_ytd: 2400000,
     },
     {
       id: 'emp_02',
@@ -52,6 +61,9 @@ export const DEMO_IZAKAYA_DATA: ShiftOptimizeRequest = {
       max_weekly_hours: 45.0,
       target_weekly_hours: 40.0,
       max_consecutive_days: 6,
+      min_days_per_period: 8,
+      max_days_per_period: 12,
+      annual_earnings_ytd: 2100000,
     },
     {
       id: 'emp_03',
@@ -62,6 +74,10 @@ export const DEMO_IZAKAYA_DATA: ShiftOptimizeRequest = {
       max_weekly_hours: 40.0,
       target_weekly_hours: 35.0,
       max_consecutive_days: 5,
+      min_days_per_period: 6,
+      max_days_per_period: 10,
+      annual_earnings_ytd: 1150000,
+      tax_wall: 1300000,
     },
     {
       id: 'emp_04',
@@ -72,6 +88,10 @@ export const DEMO_IZAKAYA_DATA: ShiftOptimizeRequest = {
       max_weekly_hours: 35.0,
       target_weekly_hours: 30.0,
       max_consecutive_days: 5,
+      min_days_per_period: 6,
+      max_days_per_period: 10,
+      annual_earnings_ytd: 950000,
+      tax_wall: 1300000,
     },
     {
       id: 'emp_05',
@@ -82,6 +102,10 @@ export const DEMO_IZAKAYA_DATA: ShiftOptimizeRequest = {
       max_weekly_hours: 30.0,
       target_weekly_hours: 25.0,
       max_consecutive_days: 4,
+      min_days_per_period: 4,
+      max_days_per_period: 8,
+      annual_earnings_ytd: 820000,
+      tax_wall: 1030000,
     },
     {
       id: 'emp_06',
@@ -92,6 +116,11 @@ export const DEMO_IZAKAYA_DATA: ShiftOptimizeRequest = {
       max_weekly_hours: 25.0,
       target_weekly_hours: 20.0,
       max_consecutive_days: 4,
+      min_days_per_period: 3,
+      max_days_per_period: 7,
+      preferred_partner_ids: ['emp_07'],
+      annual_earnings_ytd: 720000,
+      tax_wall: 1030000,
     },
     {
       id: 'emp_07',
@@ -102,6 +131,11 @@ export const DEMO_IZAKAYA_DATA: ShiftOptimizeRequest = {
       max_weekly_hours: 25.0,
       target_weekly_hours: 20.0,
       max_consecutive_days: 4,
+      min_days_per_period: 3,
+      max_days_per_period: 7,
+      preferred_partner_ids: ['emp_06'],
+      annual_earnings_ytd: 680000,
+      tax_wall: 1030000,
     },
     {
       id: 'emp_08',
@@ -112,6 +146,11 @@ export const DEMO_IZAKAYA_DATA: ShiftOptimizeRequest = {
       max_weekly_hours: 20.0,
       target_weekly_hours: 15.0,
       max_consecutive_days: 3,
+      min_days_per_period: 2,
+      max_days_per_period: 6,
+      ng_staff_ids: ['emp_09'], // NGペア設定例
+      annual_earnings_ytd: 590000,
+      tax_wall: 1030000,
     },
     {
       id: 'emp_09',
@@ -122,6 +161,11 @@ export const DEMO_IZAKAYA_DATA: ShiftOptimizeRequest = {
       max_weekly_hours: 20.0,
       target_weekly_hours: 15.0,
       max_consecutive_days: 3,
+      min_days_per_period: 2,
+      max_days_per_period: 6,
+      ng_staff_ids: ['emp_08'], // NGペア設定例
+      annual_earnings_ytd: 620000,
+      tax_wall: 1030000,
     },
     {
       id: 'emp_10',
@@ -132,6 +176,10 @@ export const DEMO_IZAKAYA_DATA: ShiftOptimizeRequest = {
       max_weekly_hours: 15.0,
       target_weekly_hours: 12.0,
       max_consecutive_days: 3,
+      min_days_per_period: 2,
+      max_days_per_period: 5,
+      annual_earnings_ytd: 380000,
+      tax_wall: 1030000,
     },
     {
       id: 'emp_11',
@@ -142,6 +190,10 @@ export const DEMO_IZAKAYA_DATA: ShiftOptimizeRequest = {
       max_weekly_hours: 15.0,
       target_weekly_hours: 12.0,
       max_consecutive_days: 3,
+      min_days_per_period: 2,
+      max_days_per_period: 5,
+      annual_earnings_ytd: 410000,
+      tax_wall: 1030000,
     },
     {
       id: 'emp_12',
@@ -152,6 +204,10 @@ export const DEMO_IZAKAYA_DATA: ShiftOptimizeRequest = {
       max_weekly_hours: 20.0,
       target_weekly_hours: 15.0,
       max_consecutive_days: 4,
+      min_days_per_period: 3,
+      max_days_per_period: 6,
+      annual_earnings_ytd: 840000,
+      tax_wall: 1030000,
     },
     {
       id: 'emp_13',
@@ -162,6 +218,10 @@ export const DEMO_IZAKAYA_DATA: ShiftOptimizeRequest = {
       max_weekly_hours: 20.0,
       target_weekly_hours: 15.0,
       max_consecutive_days: 4,
+      min_days_per_period: 3,
+      max_days_per_period: 6,
+      annual_earnings_ytd: 790000,
+      tax_wall: 1030000,
     },
     {
       id: 'emp_14',
@@ -172,6 +232,10 @@ export const DEMO_IZAKAYA_DATA: ShiftOptimizeRequest = {
       max_weekly_hours: 15.0,
       target_weekly_hours: 10.0,
       max_consecutive_days: 3,
+      min_days_per_period: 2,
+      max_days_per_period: 4,
+      annual_earnings_ytd: 450000,
+      tax_wall: 1030000,
     },
     {
       id: 'emp_15',
@@ -182,6 +246,10 @@ export const DEMO_IZAKAYA_DATA: ShiftOptimizeRequest = {
       max_weekly_hours: 15.0,
       target_weekly_hours: 10.0,
       max_consecutive_days: 3,
+      min_days_per_period: 2,
+      max_days_per_period: 4,
+      annual_earnings_ytd: 380000,
+      tax_wall: 1030000,
     },
   ],
   requirements: Array.from({ length: 14 }, (_, day_offset): ShiftRequirement[] => [
