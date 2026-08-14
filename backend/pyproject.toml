@@ -1,0 +1,27 @@
+[project]
+name = "foodshift-backend"
+version = "1.0.0"
+description = "FoodShift AI Shift Scheduling Engine"
+requires-python = ">=3.10"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear (prevents bare excepts, mutable defaults)
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+]
+ignore = []
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra -q --cov=app --cov-branch"
+testpaths = ["tests"]
+pythonpath = ["."]
