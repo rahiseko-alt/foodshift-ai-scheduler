@@ -11,6 +11,7 @@ export const AdminNavbar: React.FC = () => {
     { label: '⚡ シフト作成・最適化', href: '/admin' },
     { label: '👥 スタッフマスタ管理', href: '/admin/staff' },
     { label: '⏰ シフト枠・必要人数設定', href: '/admin/shifts' },
+    { label: '📖 機能解説・ルール仕様', href: '/admin/guide' },
   ];
 
   return (
