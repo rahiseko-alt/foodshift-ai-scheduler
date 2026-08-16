@@ -11,11 +11,13 @@ import {
 import { getDateInfo } from '@/lib/date-utils';
 import { recalculateScheduleSummary } from '@/lib/schedule-calc';
 import { saveResponse } from '@/lib/storage';
+import { NegotiationModal } from './NegotiationModal';
 
 interface Props {
   request: ShiftOptimizeRequest;
   response: ShiftOptimizeResponse | null;
   onResponseChange?: (updatedResponse: ShiftOptimizeResponse) => void;
+  showToast?: (msg: string) => void;
 }
 
 interface CellClickState {
@@ -24,7 +26,7 @@ interface CellClickState {
   slotDate: string;
 }
 
-export const ShiftMatrix: React.FC<Props> = ({ request, response, onResponseChange }) => {
+export const ShiftMatrix: React.FC<Props> = ({ request, response, onResponseChange, showToast }) => {
   const days = request.period.days;
   const staffList = request.staff_members;
   const shifts = request.shifts;
@@ -33,6 +35,7 @@ export const ShiftMatrix: React.FC<Props> = ({ request, response, onResponseChan
   const [activeCell, setActiveCell] = useState<CellClickState | null>(null);
   const [selectedStaffToAdd, setSelectedStaffToAdd] = useState<string>('');
   const [manualWarning, setManualWarning] = useState<string | null>(null);
+  const [negotiationCell, setNegotiationCell] = useState<CellClickState | null>(null);
 
   // マップ作成: (staff_id, day_offset) -> 割当シフト情報
   const assignmentMap = new Map<
@@ -208,25 +211,61 @@ export const ShiftMatrix: React.FC<Props> = ({ request, response, onResponseChan
 
   return (
     <div className="card" style={{ padding: '1rem', overflowX: 'auto' }} data-testid="shift-matrix">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-        <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-          💡 シフト表のセルをクリックすると、スタッフの手動追加・削除（微調整）が可能です。
+      {/* 人手不足アラートバナー (直接交渉アシスタントを呼び出し可能) */}
+      {response && response.summary.unfilled_requirements.length > 0 && (
+        <div
+          data-testid="unfilled-requirements-alert"
+          style={{
+            backgroundColor: '#fff1f2',
+            border: '1px solid #fecdd3',
+            borderRadius: 'var(--radius-sm)',
+            padding: '0.75rem 1rem',
+            marginBottom: '1rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+            <span style={{ fontSize: '1.125rem' }}>🚨</span>
+            <strong style={{ color: '#be123c', fontSize: '0.875rem' }}>
+              {response.summary.unfilled_requirements.length} 枠で人員不足が発生しています
+            </strong>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {response.summary.unfilled_requirements.map((u, uIdx) => {
+              const dInfo = getDateInfo(request.period.start_date, u.day_offset);
+              const sh = shifts.find((s) => s.id === u.shift_id);
+              return (
+                <button
+                  key={uIdx}
+                  type="button"
+                  data-testid={`btn-unfilled-slot-${u.day_offset}-${u.shift_id}`}
+                  onClick={() => {
+                    setNegotiationCell({
+                      dayOffset: u.day_offset,
+                      shiftId: u.shift_id,
+                      slotDate: dInfo.dateFormatted,
+                    });
+                  }}
+                  className="btn btn-sm"
+                  style={{
+                    backgroundColor: '#ffe4e6',
+                    border: '1px solid #fda4af',
+                    color: '#9f1239',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                  }}
+                >
+                  <span>
+                    🚨 {dInfo.dateFormatted} {sh?.name || u.shift_id}: {u.shortage}名不足 (代打を探す)
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.75rem' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-            <span style={{ width: '12px', height: '12px', backgroundColor: '#dbeafe', borderRadius: '2px' }} />
-            ランチ
-          </span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-            <span style={{ width: '12px', height: '12px', backgroundColor: '#dcfce7', borderRadius: '2px' }} />
-            ディナー
-          </span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-            <span style={{ width: '12px', height: '12px', backgroundColor: '#ede9fe', borderRadius: '2px' }} />
-            深夜
-          </span>
-        </div>
-      </div>
+      )}
 
       <table
         style={{
@@ -516,8 +555,54 @@ export const ShiftMatrix: React.FC<Props> = ({ request, response, onResponseChan
                 </button>
               </div>
             </div>
+
+            {/* 人手不足枠の場合の「お願いLINE文面作成」導線 */}
+            {shortageMap.has(`${activeCell.dayOffset}_${activeCell.shiftId}`) && (
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', marginTop: '1rem' }}>
+                <button
+                  type="button"
+                  data-testid="btn-open-negotiation-from-modal"
+                  onClick={() => {
+                    setNegotiationCell(activeCell);
+                    setActiveCell(null);
+                  }}
+                  className="btn btn-primary btn-sm"
+                  style={{
+                    width: '100%',
+                    backgroundColor: '#be123c',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.4rem',
+                  }}
+                >
+                  <span>🚨 代打スタッフを探す＆お願いLINE文面を作成</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
+      )}
+
+      {/* 人手不足交渉支援モーダル */}
+      {negotiationCell && (
+        <NegotiationModal
+          isOpen={true}
+          onClose={() => setNegotiationCell(null)}
+          day_offset={negotiationCell.dayOffset}
+          shift={shifts.find((s) => s.id === negotiationCell.shiftId) || shifts[0]}
+          shifts={shifts}
+          dateFormatted={negotiationCell.slotDate}
+          staff_members={staffList}
+          availabilities={request.availabilities}
+          currentSchedule={response?.schedule || []}
+          required_roles={
+            request.requirements.find(
+              (r) => r.day_offset === negotiationCell.dayOffset && r.shift_id === negotiationCell.shiftId
+            )?.required_roles
+          }
+          showToast={(msg) => (showToast ? showToast(msg) : alert(msg))}
+        />
       )}
     </div>
   );

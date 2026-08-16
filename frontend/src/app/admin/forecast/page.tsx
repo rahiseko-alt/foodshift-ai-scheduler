@@ -313,6 +313,7 @@ export default function ForecastAdminPage() {
                   <button
                     key={type}
                     type="button"
+                    data-testid={`btn-profile-${type}`}
                     onClick={() => handleBusinessTypeChange(type)}
                     style={{
                       display: 'flex',

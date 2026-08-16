@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('CUJ-3: Staff Management & Validation Flow', () => {
-  test('should validate staff input constraints, add a minor staff, configure roles & NG pairs, and persist', async ({
+test.describe('CUJ-3: Staff Management & Validation Flow (3-Second Quick Entry)', () => {
+  test('should quick-add staff in 3 seconds with minimal fields and persist, then edit advanced settings via accordion', async ({
     page,
   }) => {
     // 1. /admin/staff にアクセス
@@ -20,24 +20,22 @@ test.describe('CUJ-3: Staff Management & Validation Flow', () => {
     const modalHeading = page.locator('h2:has-text("新規スタッフ登録")');
     await expect(modalHeading).toBeVisible();
 
-    // 5. 氏名を入力
+    // 5. 【3秒クイック登録】氏名・時給・18歳未満の3項目のみ入力
     const nameInput = page.locator('input[placeholder*="佐藤 健"]');
     await nameInput.fill('高校生バイト 田中');
 
-    // 時給を1050円に設定
     const wageInput = page.locator('input[placeholder="例: 1200"]');
     await wageInput.fill('1050');
 
-    // 満18歳未満（労基法年少者）チェックボックスをON
     const minorCheckbox = page.locator('label:has-text("18歳未満 (22時以降禁止)") input[type="checkbox"]');
     await minorCheckbox.check();
     expect(await minorCheckbox.isChecked()).toBe(true);
 
-    // ロールを厨房・ホールに設定（ロールボタンクリック）
-    const roleBtn = page.locator('button:has-text("ホール"), button:has-text("キッチン")').first();
-    await roleBtn.click();
+    // アコーディオン開閉ボタンが存在することを確認
+    const toggleAdvancedBtn = page.locator('[data-testid="btn-toggle-advanced-staff"]');
+    await expect(toggleAdvancedBtn).toBeVisible();
 
-    // 保存実行
+    // 詳細設定を開かずにそのまま3秒保存実行
     const saveBtn = page.locator('[data-testid="btn-save-staff"]');
     await saveBtn.click();
 

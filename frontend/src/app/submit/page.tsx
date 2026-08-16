@@ -6,6 +6,7 @@ import { AvailabilityStatus, ShiftOptimizeRequest, ShiftOptimizeResponse } from 
 import { loadSavedRequest, loadSavedResponse, saveRequest } from '@/lib/storage';
 import { getDateInfo } from '@/lib/date-utils';
 import { OfflineBanner } from '@/components/navigation/OfflineBanner';
+import { encodeSubmissionCode } from '@/lib/line-codec';
 
 export default function SubmitPage() {
   const [requestData, setRequestData] = useState<ShiftOptimizeRequest | null>(null);
@@ -354,18 +355,89 @@ export default function SubmitPage() {
           <div
             data-testid="submit-success-banner"
             style={{
-              marginTop: '0.75rem',
-              padding: '0.75rem',
+              marginTop: '1rem',
+              padding: '1rem',
               backgroundColor: 'var(--success-bg)',
-              color: 'var(--success)',
               border: '1px solid var(--success-border)',
               borderRadius: 'var(--radius-sm)',
-              textAlign: 'center',
-              fontWeight: 600,
-              fontSize: '0.875rem',
             }}
           >
-            ✓ 希望を保存しました！
+            <div style={{ textAlign: 'center', color: 'var(--success)', fontWeight: 700, fontSize: '0.95rem', marginBottom: '0.75rem' }}>
+              ✓ 希望を保存しました！
+            </div>
+
+            {/* LINE提出コード共有カード */}
+            <div
+              style={{
+                backgroundColor: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '0.75rem',
+              }}
+            >
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
+                💬 店舗LINEグループ提出用コード (店長へ共有)
+              </div>
+              <div
+                style={{
+                  fontFamily: 'monospace',
+                  fontSize: '0.8125rem',
+                  padding: '0.5rem',
+                  backgroundColor: 'var(--surface-muted)',
+                  borderRadius: '4px',
+                  wordBreak: 'break-all',
+                  userSelect: 'all',
+                  marginBottom: '0.5rem',
+                }}
+              >
+                {encodeSubmissionCode({
+                  staff_id: selectedStaffId,
+                  period_start: requestData.period.start_date,
+                  days,
+                  shift_ids: shifts.map((s) => s.id),
+                  availabilities: Object.entries(availabilities).map(([key, status]) => {
+                    const [dStr, shiftId] = key.split('_');
+                    return {
+                      staff_id: selectedStaffId,
+                      day_offset: parseInt(dStr, 10),
+                      shift_id: shiftId,
+                      status,
+                    };
+                  }),
+                })}
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  data-testid="btn-copy-line-code"
+                  onClick={async () => {
+                    const code = encodeSubmissionCode({
+                      staff_id: selectedStaffId,
+                      period_start: requestData.period.start_date,
+                      days,
+                      shift_ids: shifts.map((s) => s.id),
+                      availabilities: Object.entries(availabilities).map(([key, status]) => {
+                        const [dStr, shiftId] = key.split('_');
+                        return {
+                          staff_id: selectedStaffId,
+                          day_offset: parseInt(dStr, 10),
+                          shift_id: shiftId,
+                          status,
+                        };
+                      }),
+                    });
+                    const msg = `【FoodShift希望提出: ${currentStaff?.name}】\n期間: ${requestData.period.start_date}〜\n提出コード: ${code}`;
+                    await navigator.clipboard.writeText(msg);
+                    alert('LINE提出用テキストをコピーしました！店舗LINEに貼り付けて送信してください。');
+                  }}
+                  className="btn btn-primary btn-sm"
+                  style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
+                >
+                  <span>📋 LINE提出テキストをコピー</span>
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </form>

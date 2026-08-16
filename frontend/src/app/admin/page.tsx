@@ -9,6 +9,7 @@ import { AdminNavbar } from '@/components/navigation/AdminNavbar';
 import { RoiSummaryCard } from '@/components/summary/RoiSummaryCard';
 import { ShiftMatrix } from '@/components/schedule/ShiftMatrix';
 import { ExportModal } from '@/components/schedule/ExportModal';
+import { LineImportModal } from '@/components/schedule/LineImportModal';
 import { checkTotalRequiredStaff, checkMissingRequiredRoles } from '@/lib/validation';
 
 export default function AdminPage() {
@@ -17,6 +18,13 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false);
   const [coldStartWarning, setColdStartWarning] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [isLineImportOpen, setIsLineImportOpen] = useState(false);
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 4000);
+  };
 
   // マウント時に LocalStorage から復元
   useEffect(() => {
@@ -114,7 +122,17 @@ export default function AdminPage() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            data-testid="btn-open-line-import"
+            onClick={() => setIsLineImportOpen(true)}
+            className="btn btn-secondary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+          >
+            <span>📥 LINE希望取込</span>
+          </button>
+
           <button
             onClick={handleOptimize}
             disabled={loading || reqTotalCheck.isZero || activeStaff.length === 0}
@@ -132,6 +150,15 @@ export default function AdminPage() {
           </button>
         </div>
       </header>
+
+      {/* LINE提出データ一括取込モーダル */}
+      <LineImportModal
+        isOpen={isLineImportOpen}
+        onClose={() => setIsLineImportOpen(false)}
+        requestData={requestData}
+        onUpdate={(updatedReq) => setRequestData(updatedReq)}
+        showToast={(msg) => showToast(msg)}
+      />
 
       {/* No. 201: 合計必要人数0名警告 */}
       {reqTotalCheck.isZero && (
@@ -194,6 +221,28 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* トースト通知 */}
+      {toastMsg && (
+        <div
+          data-testid="admin-toast-banner"
+          style={{
+            position: 'fixed',
+            top: '1rem',
+            right: '1rem',
+            zIndex: 9999,
+            backgroundColor: '#10b981',
+            color: '#ffffff',
+            padding: '0.75rem 1.25rem',
+            borderRadius: 'var(--radius-sm)',
+            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+            fontWeight: 700,
+            fontSize: '0.875rem',
+          }}
+        >
+          ✓ {toastMsg}
+        </div>
+      )}
+
       {/* エラーメッセージ */}
       {errorMsg && (
         <div
@@ -239,7 +288,8 @@ export default function AdminPage() {
       <ShiftMatrix
         request={requestData}
         response={response}
-        onResponseChange={handleResponseChange}
+        onResponseChange={(updatedRes) => setResponse(updatedRes)}
+        showToast={showToast}
       />
     </main>
   );

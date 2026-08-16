@@ -47,6 +47,7 @@ export default function StaffAdminPage() {
   const [formPreferredPartnerIds, setFormPreferredPartnerIds] = useState<string[]>([]);
   const [formYtdEarningsInput, setFormYtdEarningsInput] = useState<string>('600000');
   const [formTaxWall, setFormTaxWall] = useState<number | undefined>(1030000);
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formWarning, setFormWarning] = useState<string | null>(null);
 
@@ -580,6 +581,7 @@ export default function StaffAdminPage() {
             )}
 
             <form onSubmit={handleSaveForm}>
+              {/* クイック必須3項目 (No. 3秒登録) */}
               <div className="form-group">
                 <label className="form-label">氏名・表示名 (必須)</label>
                 <input
@@ -592,37 +594,28 @@ export default function StaffAdminPage() {
                 />
               </div>
 
-              {/* 生年月日 ＆ 満年齢自動計算 (No. 204, 261) */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                <div className="form-group">
-                  <label className="form-label">生年月日 (満年齢自動判定)</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">時給 (円 / 800〜10,000円)</label>
                   <input
-                    type="date"
+                    type="text"
                     className="form-input"
-                    value={formBirthDate}
-                    onChange={(e) => handleBirthDateChange(e.target.value)}
+                    value={formHourlyWageInput}
+                    onChange={(e) => setFormHourlyWageInput(e.target.value)}
+                    placeholder="例: 1200"
+                    required
                   />
-                  {formBirthDate && (
-                    <div style={{ fontSize: '0.75rem', marginTop: '0.25rem', color: 'var(--text-muted)' }}>
-                      現在: <strong>満{calculateAge(formBirthDate) ?? '-'}歳</strong>{' '}
-                      {isMinorFromBirthDate(formBirthDate) ? (
-                        <span style={{ color: 'var(--danger)', fontWeight: 700 }}> (18歳未満 / 年少者)</span>
-                      ) : (
-                        <span style={{ color: 'var(--success)', fontWeight: 600 }}> (一般スタッフ)</span>
-                      )}
-                    </div>
-                  )}
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">労基法年少者 (深夜業禁止)</label>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">労基法年少者</label>
                   <label
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.5rem',
+                      gap: '0.4rem',
                       height: '38px',
-                      fontSize: '0.875rem',
+                      fontSize: '0.8125rem',
                       cursor: 'pointer',
                     }}
                   >
@@ -637,192 +630,242 @@ export default function StaffAdminPage() {
                 </div>
               </div>
 
-              {/* 年齢確認・在籍・留学生・母性保護フラグ (No. 204, 215, 267, 275) */}
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-                  gap: '0.5rem',
-                  marginBottom: '1rem',
-                  padding: '0.5rem',
-                  backgroundColor: '#f8fafc',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--border)',
-                }}
-              >
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={formAgeVerified}
-                    onChange={(e) => setFormAgeVerified(e.target.checked)}
-                  />
-                  <span>年齢確認済 (身分証確認)</span>
-                </label>
-
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={formIsActive}
-                    onChange={(e) => setFormIsActive(e.target.checked)}
-                  />
-                  <span>在籍中 (有効)</span>
-                </label>
-
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={formIsStudentVisa}
-                    onChange={(e) => handleStudentVisaToggle(e.target.checked)}
-                  />
-                  <span>留学生 (週28h上限)</span>
-                </label>
-
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={formIsPregnant}
-                    onChange={(e) => setFormIsPregnant(e.target.checked)}
-                  />
-                  <span>母性保護 (妊婦・産後)</span>
-                </label>
+              {/* アコーディオン開閉ボタン */}
+              <div style={{ marginBottom: '1rem' }}>
+                <button
+                  type="button"
+                  data-testid="btn-toggle-advanced-staff"
+                  onClick={() => setIsAdvancedOpen(!isAdvancedOpen)}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem 0.75rem',
+                    backgroundColor: 'var(--surface-muted)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-sm)',
+                    fontSize: '0.8125rem',
+                    fontWeight: 600,
+                    color: 'var(--text-muted)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <span>{isAdvancedOpen ? '▲ 詳細設定を閉じる' : '▼ 法令・詳細契約設定 (必要な場合のみ)'}</span>
+                  <span style={{ fontSize: '0.75rem' }}>
+                    {isAdvancedOpen ? '非表示' : '生年月日・留学生・母性保護・ロール・NGペア等'}
+                  </span>
+                </button>
               </div>
 
-              {/* 時給 (全角・カンマ自動変換対応: No. 202, 210) */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                <div className="form-group">
-                  <label className="form-label">時給 (円 / 800〜10,000円)</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={formHourlyWageInput}
-                    onChange={(e) => setFormHourlyWageInput(e.target.value)}
-                    placeholder="例: 1200"
-                    required
-                  />
-                </div>
+              {/* アコーディオン展開部 */}
+              {isAdvancedOpen && (
+                <div
+                  style={{
+                    padding: '1rem',
+                    backgroundColor: '#f8fafc',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border)',
+                    marginBottom: '1rem',
+                  }}
+                >
+                  {/* 保有ロール */}
+                  <div className="form-group">
+                    <label className="form-label">保有ロール (複数選択可)</label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      {ROLE_OPTIONS.map((r) => (
+                        <button
+                          type="button"
+                          key={r.id}
+                          onClick={() => toggleRole(r.id)}
+                          className={`btn btn-sm ${
+                            formRoles.includes(r.id) ? 'btn-primary' : 'btn-secondary'
+                          }`}
+                        >
+                          {formRoles.includes(r.id) ? '✓ ' : '+ '} {r.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-                <div className="form-group">
-                  <label className="form-label">連続勤務上限日数 (1〜7日)</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={formMaxConsecutiveDaysInput}
-                    onChange={(e) => setFormMaxConsecutiveDaysInput(e.target.value)}
-                    placeholder="4"
-                  />
-                </div>
-              </div>
+                  {/* 生年月日 ＆ 満年齢自動計算 (No. 204, 261) */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">生年月日 (満年齢自動判定)</label>
+                      <input
+                        type="date"
+                        className="form-input"
+                        value={formBirthDate}
+                        onChange={(e) => handleBirthDateChange(e.target.value)}
+                      />
+                      {formBirthDate && (
+                        <div style={{ fontSize: '0.75rem', marginTop: '0.25rem', color: 'var(--text-muted)' }}>
+                          現在: <strong>満{calculateAge(formBirthDate) ?? '-'}歳</strong>{' '}
+                          {isMinorFromBirthDate(formBirthDate) ? (
+                            <span style={{ color: 'var(--danger)', fontWeight: 700 }}> (18歳未満 / 年少者)</span>
+                          ) : (
+                            <span style={{ color: 'var(--success)', fontWeight: 600 }}> (一般スタッフ)</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
 
-              <div className="form-group">
-                <label className="form-label">保有ロール (複数選択可)</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  {ROLE_OPTIONS.map((r) => (
-                    <button
-                      type="button"
-                      key={r.id}
-                      onClick={() => toggleRole(r.id)}
-                      className={`btn btn-sm ${
-                        formRoles.includes(r.id) ? 'btn-primary' : 'btn-secondary'
-                      }`}
-                    >
-                      {formRoles.includes(r.id) ? '✓ ' : '+ '} {r.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">連続勤務上限日数 (1〜7日)</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={formMaxConsecutiveDaysInput}
+                        onChange={(e) => setFormMaxConsecutiveDaysInput(e.target.value)}
+                        placeholder="4"
+                      />
+                    </div>
+                  </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                <div className="form-group">
-                  <label className="form-label">
-                    週間最大労働時間 (h){formIsStudentVisa && <span style={{ color: 'var(--danger)' }}> (留学生: 最大28h)</span>}
-                  </label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={formMaxWeeklyHoursInput}
-                    onChange={(e) => setFormMaxWeeklyHoursInput(e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">週間目標労働時間 (h)</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={formTargetWeeklyHoursInput}
-                    onChange={(e) => setFormTargetWeeklyHoursInput(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                <div className="form-group">
-                  <label className="form-label">年収の壁（税・社会保険）</label>
-                  <select
-                    className="form-select"
-                    value={formTaxWall || ''}
-                    onChange={(e) =>
-                      setFormTaxWall(e.target.value ? Number(e.target.value) : undefined)
-                    }
+                  {/* 年齢確認・在籍・留学生・母性保護フラグ (No. 204, 215, 267, 275) */}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                      gap: '0.5rem',
+                      marginBottom: '0.75rem',
+                      padding: '0.5rem',
+                      backgroundColor: '#ffffff',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border)',
+                    }}
                   >
-                    <option value="">設定なし (制限なし)</option>
-                    <option value="1030000">103万円 (所得税控除)</option>
-                    <option value="1300000">130万円 (社会保険扶養)</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">今年度 累計収入 (円)</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={formYtdEarningsInput}
-                    onChange={(e) => setFormYtdEarningsInput(e.target.value)}
-                  />
-                </div>
-              </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={formAgeVerified}
+                        onChange={(e) => setFormAgeVerified(e.target.checked)}
+                      />
+                      <span>年齢確認済 (身分証確認)</span>
+                    </label>
 
-              {/* NGペア設定 */}
-              <div className="form-group">
-                <label className="form-label">同時勤務NGスタッフ (相性制約)</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', maxHeight: '100px', overflowY: 'auto' }}>
-                  {requestData.staff_members
-                    .filter((s) => s.id !== formId)
-                    .map((other) => (
-                      <button
-                        type="button"
-                        key={other.id}
-                        onClick={() => toggleNgStaff(other.id)}
-                        className={`btn btn-sm ${
-                          formNgStaffIds.includes(other.id) ? 'btn-danger' : 'btn-secondary'
-                        }`}
-                        style={{ fontSize: '0.75rem' }}
-                      >
-                        {formNgStaffIds.includes(other.id) ? '🚫 NG: ' : '+ '} {other.name.split(' ')[0]}
-                      </button>
-                    ))}
-                </div>
-              </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={formIsActive}
+                        onChange={(e) => setFormIsActive(e.target.checked)}
+                      />
+                      <span>在籍中 (有効)</span>
+                    </label>
 
-              {/* 希望ペア設定 */}
-              <div className="form-group">
-                <label className="form-label">同時勤務希望ペア (友人・ペア推奨)</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', maxHeight: '100px', overflowY: 'auto' }}>
-                  {requestData.staff_members
-                    .filter((s) => s.id !== formId)
-                    .map((other) => (
-                      <button
-                        type="button"
-                        key={other.id}
-                        onClick={() => togglePreferredStaff(other.id)}
-                        className={`btn btn-sm ${
-                          formPreferredPartnerIds.includes(other.id) ? 'btn-primary' : 'btn-secondary'
-                        }`}
-                        style={{ fontSize: '0.75rem' }}
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={formIsStudentVisa}
+                        onChange={(e) => handleStudentVisaToggle(e.target.checked)}
+                      />
+                      <span>留学生 (週28h上限)</span>
+                    </label>
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={formIsPregnant}
+                        onChange={(e) => setFormIsPregnant(e.target.checked)}
+                      />
+                      <span>母性保護 (妊婦・産後)</span>
+                    </label>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">
+                        週間最大労働時間 (h){formIsStudentVisa && <span style={{ color: 'var(--danger)' }}> (留学生: 最大28h)</span>}
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={formMaxWeeklyHoursInput}
+                        onChange={(e) => setFormMaxWeeklyHoursInput(e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">週間目標労働時間 (h)</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={formTargetWeeklyHoursInput}
+                        onChange={(e) => setFormTargetWeeklyHoursInput(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">年収の壁（税・社会保険）</label>
+                      <select
+                        className="form-select"
+                        value={formTaxWall || ''}
+                        onChange={(e) =>
+                          setFormTaxWall(e.target.value ? Number(e.target.value) : undefined)
+                        }
                       >
-                        {formPreferredPartnerIds.includes(other.id) ? '🤝 ペア: ' : '+ '} {other.name.split(' ')[0]}
-                      </button>
-                    ))}
+                        <option value="">設定なし (制限なし)</option>
+                        <option value="1030000">103万円 (所得税控除)</option>
+                        <option value="1300000">130万円 (社会保険扶養)</option>
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">今年度 累計収入 (円)</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={formYtdEarningsInput}
+                        onChange={(e) => setFormYtdEarningsInput(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* NGペア設定 */}
+                  <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                    <label className="form-label">同時勤務NGスタッフ (相性制約)</label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', maxHeight: '100px', overflowY: 'auto' }}>
+                      {requestData.staff_members
+                        .filter((s) => s.id !== formId)
+                        .map((other) => (
+                          <button
+                            type="button"
+                            key={other.id}
+                            onClick={() => toggleNgStaff(other.id)}
+                            className={`btn btn-sm ${
+                              formNgStaffIds.includes(other.id) ? 'btn-danger' : 'btn-secondary'
+                            }`}
+                            style={{ fontSize: '0.75rem' }}
+                          >
+                            {formNgStaffIds.includes(other.id) ? '🚫 NG: ' : '+ '} {other.name.split(' ')[0]}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* 希望ペア設定 */}
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">同時勤務希望ペア (友人・ペア推奨)</label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', maxHeight: '100px', overflowY: 'auto' }}>
+                      {requestData.staff_members
+                        .filter((s) => s.id !== formId)
+                        .map((other) => (
+                          <button
+                            type="button"
+                            key={other.id}
+                            onClick={() => togglePreferredStaff(other.id)}
+                            className={`btn btn-sm ${
+                              formPreferredPartnerIds.includes(other.id) ? 'btn-primary' : 'btn-secondary'
+                            }`}
+                            style={{ fontSize: '0.75rem' }}
+                          >
+                            {formPreferredPartnerIds.includes(other.id) ? '🤝 ペア: ' : '+ '} {other.name.split(' ')[0]}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div
                 style={{
