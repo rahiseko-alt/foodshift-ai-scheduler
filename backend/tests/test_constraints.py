@@ -427,3 +427,204 @@ def test_fixed_assignments_warm_start():
     assert any(s.id == "emp_b" for s in day2_slot.assigned_staff), (
         "Day 2 に emp_b が固定割当されていません"
     )
+
+
+def test_foreign_student_28h_hard_constraint():
+    """留学生（is_foreign_student == True）は週間労働時間が28.0h以下に厳格制限されることを検証。"""
+    request = ShiftOptimizeRequest(
+        period=PeriodSchema(start_date="2026-09-01", days=7),
+        shifts=[
+            ShiftSchema(
+                id="day",
+                name="日勤",
+                start="09:00",
+                end="17:00",
+                hours=8.0,
+                break_minutes=0,
+                is_late_night=False,
+            ),
+        ],
+        staff_members=[
+            StaffMemberSchema(
+                id="student_1",
+                name="留学生1",
+                is_foreign_student=True,
+                max_weekly_hours=28.0,
+                roles=["hall"],
+                hourly_wage=1000,
+            ),
+        ],
+        requirements=[
+            ShiftRequirementSchema(day_offset=d, shift_id="day", min_staff=1) for d in range(7)
+        ],
+        availabilities=[],
+    )
+
+    res = solve_shift_schedule(request)
+    assert res.status == "FEASIBLE_WITH_SHORTAGE"
+
+    assigned_days = sum(
+        1 for slot in res.schedule if any(s.id == "student_1" for s in slot.assigned_staff)
+    )
+    # 8h × 3日 = 24h <= 28h (4日入ると 32h > 28h で違反)
+    assert assigned_days <= 3, (
+        f"留学生が週 {assigned_days} 日 ({assigned_days * 8}h) 勤務しています（28h超過）"
+    )
+
+
+def test_maternity_protection_zero_late_night_assignment():
+    """母性保護対象（is_maternity_protection == True）は深夜枠に割当0件を検証。"""
+    request = ShiftOptimizeRequest(
+        period=PeriodSchema(start_date="2026-09-01", days=3),
+        shifts=[
+            ShiftSchema(
+                id="night",
+                name="夜勤",
+                start="18:00",
+                end="23:00",
+                hours=5.0,
+                is_late_night=True,
+            ),
+        ],
+        staff_members=[
+            StaffMemberSchema(
+                id="mat_staff",
+                name="妊産婦スタッフ",
+                is_minor=False,
+                is_maternity_protection=True,
+                roles=["hall"],
+                hourly_wage=1200,
+            ),
+        ],
+        requirements=[
+            ShiftRequirementSchema(day_offset=d, shift_id="night", min_staff=1) for d in range(3)
+        ],
+        availabilities=[],
+    )
+
+    res = solve_shift_schedule(request)
+    assert res.status == "FEASIBLE_WITH_SHORTAGE"
+
+    # 全夜勤枠で母性保護スタッフが0件割当
+    for slot in res.schedule:
+        assigned_ids = [s.id for s in slot.assigned_staff]
+        assert "mat_staff" not in assigned_ids, "母性保護対象スタッフが深夜シフトに配置されています"
+
+
+def test_minor_max_8h_daily_limit_hard_constraint():
+    """年少者（is_minor == True）は1日8時間超のシフトに割当0件を検証。"""
+    request = ShiftOptimizeRequest(
+        period=PeriodSchema(start_date="2026-09-01", days=2),
+        shifts=[
+            ShiftSchema(
+                id="long_shift",
+                name="9.5時間ロング",
+                start="09:00",
+                end="18:30",
+                hours=9.5,
+                is_late_night=False,
+            ),
+        ],
+        staff_members=[
+            StaffMemberSchema(
+                id="minor_emp",
+                name="高校生",
+                is_minor=True,
+                roles=["hall"],
+                hourly_wage=1000,
+            ),
+        ],
+        requirements=[
+            ShiftRequirementSchema(day_offset=d, shift_id="long_shift", min_staff=1)
+            for d in range(2)
+        ],
+        availabilities=[],
+    )
+
+    res = solve_shift_schedule(request)
+    assert res.status == "FEASIBLE_WITH_SHORTAGE"
+
+    for slot in res.schedule:
+        assigned_ids = [s.id for s in slot.assigned_staff]
+        assert "minor_emp" not in assigned_ids, (
+            "年少者に8時間を超える長時間シフトが配置されています"
+        )
+
+
+def test_birth_date_auto_minor_protection():
+    """生年月日から18歳未満と判定されたスタッフは、is_minor=False指定でも深夜シフトに配置されないことを検証。"""
+    request = ShiftOptimizeRequest(
+        period=PeriodSchema(start_date="2026-09-01", days=3),
+        shifts=[
+            ShiftSchema(
+                id="night",
+                name="夜勤",
+                start="18:00",
+                end="23:00",
+                hours=5.0,
+                is_late_night=True,
+            ),
+        ],
+        staff_members=[
+            StaffMemberSchema(
+                id="young_emp",
+                name="17歳スタッフ",
+                is_minor=False,  # フラグはFalseだが生年月日が17歳
+                birth_date="2009-01-15",
+                roles=["hall"],
+                hourly_wage=1000,
+            ),
+        ],
+        requirements=[
+            ShiftRequirementSchema(day_offset=d, shift_id="night", min_staff=1) for d in range(3)
+        ],
+        availabilities=[],
+    )
+
+    res = solve_shift_schedule(request)
+    assert res.status == "FEASIBLE_WITH_SHORTAGE"
+
+    for slot in res.schedule:
+        assigned_ids = [s.id for s in slot.assigned_staff]
+        assert "young_emp" not in assigned_ids, (
+            "生年月日18歳未満のスタッフが深夜シフトに配置されています"
+        )
+
+
+def test_missing_required_role_bottleneck_warning():
+    """必須ロールを保有するスタッフが1人も存在しない場合、ボトルネック警告が出力されることを検証。"""
+    request = ShiftOptimizeRequest(
+        period=PeriodSchema(start_date="2026-09-01", days=2),
+        shifts=[
+            ShiftSchema(
+                id="s1",
+                name="早番",
+                start="09:00",
+                end="17:00",
+                hours=8.0,
+                is_late_night=False,
+            ),
+        ],
+        staff_members=[
+            StaffMemberSchema(
+                id="emp1",
+                name="スタッフ1",
+                roles=["hall"],
+                hourly_wage=1000,
+            ),
+        ],
+        requirements=[
+            ShiftRequirementSchema(
+                day_offset=0,
+                shift_id="s1",
+                min_staff=1,
+                required_roles={"key_holder": 1},
+            ),
+        ],
+        availabilities=[],
+    )
+
+    res = solve_shift_schedule(request)
+    assert any("key_holder" in b for b in res.summary.bottleneck_constraints), (
+        f"ボトルネックに必須ロール不足警告が含まれていません: {res.summary.bottleneck_constraints}"
+    )

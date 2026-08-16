@@ -20,6 +20,11 @@ export interface StaffMember {
   id: string;
   name: string;
   is_minor: boolean;
+  birth_date?: string; // 生年月日 (YYYY-MM-DD)
+  is_student_visa?: boolean; // 留学生フラグ (週28h上限)
+  is_pregnant_or_nursing?: boolean; // 母性保護フラグ (妊婦・産後)
+  is_active?: boolean; // 在籍中 / 退職・休職フラグ (デフォルト: true)
+  age_verified?: boolean; // 年齢確認同意 (No. 204)
   roles: string[];
   hourly_wage: number;
   max_weekly_hours: number;

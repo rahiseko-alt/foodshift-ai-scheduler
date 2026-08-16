@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class PeriodSchema(BaseModel):
@@ -17,11 +17,32 @@ class ShiftSchema(BaseModel):
     break_minutes: int = Field(default=0, ge=0, le=180, description="法定休憩時間(分)")
     is_late_night: bool = Field(default=False, description="22:00以降にかかるシフトか否か")
 
+    @model_validator(mode="after")
+    def validate_hours_consistency(self) -> "ShiftSchema":
+        start_parts = self.start.split(":")
+        end_parts = self.end.split(":")
+        start_min = int(start_parts[0]) * 60 + int(start_parts[1])
+        end_min = int(end_parts[0]) * 60 + int(end_parts[1])
+        if end_min < start_min:
+            end_min += 24 * 60
+        calculated_hours = round((end_min - start_min) / 60.0, 2)
+        if abs(calculated_hours - self.hours) > 1e-4:
+            raise ValueError(
+                f"シフトの開始・終了時刻から計算される拘束時間 ({calculated_hours:.1f}h) と"
+                f"指定された拘束時間 ({self.hours:.1f}h) が一致しません。"
+            )
+        return self
+
 
 class StaffMemberSchema(BaseModel):
     id: str = Field(..., min_length=1, max_length=50, pattern=r"^[a-zA-Z0-9_\-]+$")
     name: str = Field(..., min_length=1, max_length=50)
     is_minor: bool = Field(default=False, description="満18歳未満フラグ")
+    is_foreign_student: bool = Field(default=False, description="留学生フラグ（週28時間制限）")
+    is_maternity_protection: bool = Field(default=False, description="母性保護フラグ（深夜業制限）")
+    birth_date: str | None = Field(
+        default=None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="生年月日 (YYYY-MM-DD)"
+    )
     roles: list[str] = Field(..., min_length=1, max_length=10, description="保有ロール")
     hourly_wage: int = Field(..., ge=800, le=10000, description="時給(円)")
     max_weekly_hours: float = Field(default=40.0, ge=0.0, le=168.0, description="週間最大労働時間")
@@ -35,6 +56,12 @@ class StaffMemberSchema(BaseModel):
     )
     min_days_per_period: int = Field(default=0, ge=0, description="期間内最小出勤日数")
     max_days_per_period: int = Field(default=31, ge=0, le=31, description="期間内最大出勤日数")
+
+    @model_validator(mode="after")
+    def validate_foreign_student_hours(self) -> "StaffMemberSchema":
+        if self.is_foreign_student and self.max_weekly_hours > 28.0:
+            raise ValueError("留学生の週間最大労働時間は28.0時間以下で設定してください。")
+        return self
 
 
 class ShiftRequirementSchema(BaseModel):

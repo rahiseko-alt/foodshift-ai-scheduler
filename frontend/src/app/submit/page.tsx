@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AvailabilityStatus, ShiftOptimizeRequest, ShiftOptimizeResponse } from '@/lib/types';
 import { loadSavedRequest, loadSavedResponse, saveRequest } from '@/lib/storage';
 import { getDateInfo } from '@/lib/date-utils';
+import { OfflineBanner } from '@/components/navigation/OfflineBanner';
 
 export default function SubmitPage() {
   const [requestData, setRequestData] = useState<ShiftOptimizeRequest | null>(null);
@@ -103,6 +104,8 @@ export default function SubmitPage() {
       className="container"
       style={{ maxWidth: '520px', padding: '1rem 0.75rem', minHeight: '100dvh' }}
     >
+      <OfflineBanner />
+
       <header
         style={{
           display: 'flex',

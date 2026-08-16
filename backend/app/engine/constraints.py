@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from ortools.sat.python import cp_model
 
 from app.engine.helpers import add_consecutive_days_constraint
@@ -8,7 +10,28 @@ from app.engine.time_utils import (
 )
 from app.schemas.scheduler import (
     ShiftOptimizeRequest,
+    StaffMemberSchema,
 )
+
+
+def is_staff_minor(staff: StaffMemberSchema, start_date_str: str) -> bool:
+    """スタッフが満18歳未満（年少者）であるかを判定する（is_minorフラグまたは生年月日から算出）。"""
+    if staff.is_minor:
+        return True
+    if staff.birth_date:
+        try:
+            start_dt = datetime.strptime(start_date_str, "%Y-%m-%d")
+            birth_dt = datetime.strptime(staff.birth_date, "%Y-%m-%d")
+            age = (
+                start_dt.year
+                - birth_dt.year
+                - ((start_dt.month, start_dt.day) < (birth_dt.month, birth_dt.day))
+            )
+            if age < 18:
+                return True
+        except Exception:
+            pass
+    return False
 
 
 def build_optimization_model(
@@ -50,14 +73,26 @@ def build_optimization_model(
     obj_coeffs: list[int] = []
     under_cover_vars: dict[tuple[int, int], cp_model.IntVar] = {}
 
-    # 2. Hard制約: 年少者保護 (労基法第60条 22:00以降深夜業禁止)
+    # 2. Hard制約: 年少者保護 (労基法第60条) & 母性保護 (労基法第64条の3 深夜禁止)
     for s_idx, shift in enumerate(request.shifts):
         is_late = shift.is_late_night or is_shift_late_night(shift.start, shift.end)
         if is_late:
             for e_idx, staff in enumerate(request.staff_members):
-                if staff.is_minor:
+                if (
+                    is_staff_minor(staff, request.period.start_date)
+                    or staff.is_maternity_protection
+                ):
                     for d in range(num_days):
-                        # 年少者の深夜シフト割当変数を 0 に固定 (例外なく禁止)
+                        # 年少者および母性保護対象者の深夜シフト割当変数を 0 に固定 (例外なく禁止)
+                        model.Add(work[e_idx, s_idx, d] == 0)
+
+    # 2b. Hard制約: 年少者の1日拘束時間上限 (労基法第60条 原則1日8時間以下)
+    for s_idx, shift in enumerate(request.shifts):
+        if shift.hours > 8.0:
+            for e_idx, staff in enumerate(request.staff_members):
+                if is_staff_minor(staff, request.period.start_date):
+                    for d in range(num_days):
+                        # 1日8時間を超えるシフトへの年少者割当変数を 0 に固定
                         model.Add(work[e_idx, s_idx, d] == 0)
 
     # 3. Hard制約: スタッフ別の連続勤務上限
@@ -122,12 +157,17 @@ def build_optimization_model(
             s_idx = shift_id_to_idx[fa.shift_id]
             model.Add(work[e_idx, s_idx, fa.day_offset] == 1)
 
-    # 9. Hard制約: 週間最大労働時間 (休憩時間を差し引いた実働時間で各週7日ブロックでの合計)
+    # 9. Hard制約: 週間最大労働時間 (留学生は28.0h、一般はmax_weekly_hours)
     shift_net_hours = [
         int(round(max(0.0, s.hours - s.break_minutes / 60.0) * 10)) for s in request.shifts
     ]
     for e_idx, staff in enumerate(request.staff_members):
-        max_scaled = int(round(staff.max_weekly_hours * 10))
+        effective_max = (
+            min(staff.max_weekly_hours, 28.0)
+            if staff.is_foreign_student
+            else staff.max_weekly_hours
+        )
+        max_scaled = int(round(effective_max * 10))
         # 7日ごとのブロック制約
         for start_d in range(0, max(1, num_days - 6), 7):
             window_days = range(start_d, min(num_days, start_d + 7))
@@ -170,6 +210,8 @@ def build_optimization_model(
     # 11. Hard制約: 必須ロール要件 (例: kitchen_leader >= 1)
     for (d, s), required_roles in role_req_map.items():
         for role_name, min_role_count in required_roles.items():
+            if min_role_count <= 0:
+                continue
             capable_staff = [
                 e for e, st in enumerate(request.staff_members) if role_name in st.roles
             ]
@@ -179,6 +221,13 @@ def build_optimization_model(
                 model.Add(role_assigned + role_under >= min_role_count)
                 obj_vars.append(role_under)
                 obj_coeffs.append(8000)  # ロール不足ペナルティ
+            else:
+                # 該当ロールを保有するスタッフが1人も存在しない場合
+                role_under = model.NewIntVar(
+                    min_role_count, min_role_count, f"role_under_d{d}_s{s}_{role_name}"
+                )
+                obj_vars.append(role_under)
+                obj_coeffs.append(8000)
 
     # 12. スタッフ希望 (unavailable: Hard制約, want: Soft制約)
     for avail in request.availabilities:

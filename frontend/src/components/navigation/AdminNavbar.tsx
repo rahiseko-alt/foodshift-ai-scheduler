@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { OfflineBanner } from './OfflineBanner';
 
 export const AdminNavbar: React.FC = () => {
   const pathname = usePathname();
@@ -16,6 +17,8 @@ export const AdminNavbar: React.FC = () => {
 
   return (
     <nav style={{ marginBottom: '1.5rem' }}>
+      <OfflineBanner />
+
       <div
         style={{
           display: 'flex',

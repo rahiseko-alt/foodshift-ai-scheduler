@@ -42,7 +42,22 @@ def _analyze_infeasible_bottlenecks(request: ShiftOptimizeRequest) -> list[str]:
                 f"登録スタッフ総数 ({num_staff}名) を超過しています（1日1シフト制約）。"
             )
 
-    # 3. NGペア競合チェック
+    # 3. 必須ロール保持者の有無チェック
+    all_staff_roles = {r for st in request.staff_members for r in st.roles}
+    missing_roles = sorted(
+        {
+            role
+            for req in request.requirements
+            for role, count in req.required_roles.items()
+            if count > 0 and role not in all_staff_roles
+        }
+    )
+    if missing_roles:
+        bottlenecks.append(
+            f"必須ロール [{', '.join(missing_roles)}] を保有するスタッフが1人も登録されていません。"
+        )
+
+    # 4. NGペア競合チェック
     ng_pairs = []
     for i, st1 in enumerate(request.staff_members):
         for st2 in request.staff_members[i + 1 :]:
@@ -51,7 +66,7 @@ def _analyze_infeasible_bottlenecks(request: ShiftOptimizeRequest) -> list[str]:
     if ng_pairs:
         bottlenecks.append(f"NGペア制約が設定されています: {ng_pairs[:3]}")
 
-    # 4. 固定割当の重複チェック
+    # 5. 固定割当の重複チェック
     fixed_by_staff_day: dict[tuple[str, int], list[str]] = {}
     for fa in request.fixed_assignments:
         key = (fa.staff_id, fa.day_offset)
@@ -81,6 +96,21 @@ def _analyze_shortage_bottlenecks(
     bottlenecks: list[str] = []
     shift_map = {s.id: s for s in request.shifts}
 
+    # 必須ロール保持者の有無チェック
+    all_staff_roles = {r for st in request.staff_members for r in st.roles}
+    missing_roles = sorted(
+        {
+            role
+            for req in request.requirements
+            for role, count in req.required_roles.items()
+            if count > 0 and role not in all_staff_roles
+        }
+    )
+    if missing_roles:
+        bottlenecks.append(
+            f"必須ロール [{', '.join(missing_roles)}] を保有するスタッフが1人も登録されていません。"
+        )
+
     for unfilled in unfilled_list:
         shift = shift_map.get(unfilled.shift_id)
         shift_name = shift.name if shift else unfilled.shift_id
@@ -93,18 +123,20 @@ def _analyze_shortage_bottlenecks(
             if a.day_offset == d and a.shift_id == unfilled.shift_id and a.status == "unavailable"
         )
 
-        # 深夜シフトの場合、未成年者の除外
-        minor_excluded = 0
+        # 深夜シフトの場合、未成年者・母性保護対象者の除外
+        night_excluded = 0
         if shift and (
             shift.is_late_night or calculate_late_night_hours(shift.start, shift.end) > 0
         ):
-            minor_excluded = sum(1 for st in request.staff_members if st.is_minor)
+            night_excluded = sum(
+                1 for st in request.staff_members if st.is_minor or st.is_maternity_protection
+            )
 
         reasons = []
         if unavail_count > 0:
             reasons.append(f"不可希望 {unavail_count}名")
-        if minor_excluded > 0:
-            reasons.append(f"年少者深夜除外 {minor_excluded}名")
+        if night_excluded > 0:
+            reasons.append(f"深夜業除外(年少者/母性保護) {night_excluded}名")
 
         reason_str = " / ".join(reasons) if reasons else "連続勤務・インターバル上限等による制約"
         bottlenecks.append(
@@ -243,8 +275,21 @@ def solve_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeResponse
     final_status = "FEASIBLE_WITH_SHORTAGE" if unfilled_list else "OPTIMAL"
 
     bottleneck_constraints = []
+    all_staff_roles = {r for st in request.staff_members for r in st.roles}
+    missing_roles = sorted(
+        {
+            role
+            for req in request.requirements
+            for role, count in req.required_roles.items()
+            if count > 0 and role not in all_staff_roles
+        }
+    )
     if unfilled_list:
         bottleneck_constraints = _analyze_shortage_bottlenecks(request, unfilled_list)
+    elif missing_roles:
+        bottleneck_constraints.append(
+            f"必須ロール [{', '.join(missing_roles)}] を保有するスタッフが1人も登録されていません。"
+        )
 
     total_labor_cost = total_base_labor_cost + total_deep_night_extra_cost
 

@@ -2,10 +2,15 @@
 
 import React, { useEffect, useState } from 'react';
 import { AdminNavbar } from '@/components/navigation/AdminNavbar';
-import { Shift, ShiftOptimizeRequest, ShiftRequirement } from '@/lib/types';
+import { Shift, ShiftOptimizeRequest } from '@/lib/types';
 import { DEMO_IZAKAYA_DATA } from '@/lib/mock-data';
 import { loadSavedRequest, saveRequest } from '@/lib/storage';
 import { getDateInfo } from '@/lib/date-utils';
+import {
+  normalizeNumberInput,
+  checkTotalRequiredStaff,
+  checkMissingRequiredRoles,
+} from '@/lib/validation';
 
 export default function ShiftsAdminPage() {
   const [requestData, setRequestData] = useState<ShiftOptimizeRequest>(DEMO_IZAKAYA_DATA);
@@ -19,8 +24,8 @@ export default function ShiftsAdminPage() {
   const [slotName, setSlotName] = useState('');
   const [slotStart, setSlotStart] = useState('10:00');
   const [slotEnd, setSlotEnd] = useState('15:00');
-  const [slotHours, setSlotHours] = useState(5.0);
-  const [slotBreakMin, setSlotBreakMin] = useState(0);
+  const [slotHoursInput, setSlotHoursInput] = useState('5.0');
+  const [slotBreakMinInput, setSlotBreakMinInput] = useState('0');
   const [slotIsLate, setSlotIsLate] = useState(false);
   const [slotError, setSlotError] = useState<string | null>(null);
 
@@ -44,7 +49,7 @@ export default function ShiftsAdminPage() {
     let eMin = eH * 60 + (eM || 0);
     if (eMin <= sMin) eMin += 24 * 60;
     const diffHours = (eMin - sMin) / 60;
-    setSlotHours(Math.round(diffHours * 10) / 10);
+    setSlotHoursInput(String(Math.round(diffHours * 10) / 10));
     setSlotIsLate(eMin > 22 * 60 || sMin >= 22 * 60);
   };
 
@@ -53,7 +58,7 @@ export default function ShiftsAdminPage() {
     setSlotId(`shift_${Date.now().toString().slice(-4)}`);
     setSlotName('');
     updateTimes('11:00', '16:00');
-    setSlotBreakMin(0);
+    setSlotBreakMinInput('0');
     setSlotError(null);
     setIsSlotModalOpen(true);
   };
@@ -64,8 +69,8 @@ export default function ShiftsAdminPage() {
     setSlotName(slot.name);
     setSlotStart(slot.start);
     setSlotEnd(slot.end);
-    setSlotHours(slot.hours);
-    setSlotBreakMin(slot.break_minutes || 0);
+    setSlotHoursInput(String(slot.hours));
+    setSlotBreakMinInput(String(slot.break_minutes || 0));
     setSlotIsLate(slot.is_late_night);
     setSlotError(null);
     setIsSlotModalOpen(true);
@@ -78,7 +83,7 @@ export default function ShiftsAdminPage() {
     }
     const target = requestData.shifts.find((s) => s.id === shiftId);
     if (!target) return;
-    if (!window.confirm(`シフト枠「${target.name}」を削除しますか？\n（関連する日別要件も削除されます）`)) return;
+    if (!window.confirm(`【確認】シフト枠「${target.name}」を削除しますか？\n（関連する日別必要人数データもすべて削除されます。この操作は取り消せません）`)) return;
 
     const updatedShifts = requestData.shifts.filter((s) => s.id !== shiftId);
     const updatedReqs = requestData.requirements.filter((r) => r.shift_id !== shiftId);
@@ -96,6 +101,39 @@ export default function ShiftsAdminPage() {
     showToast(`シフト枠「${target.name}」を削除しました`);
   };
 
+  // 破壊的操作: 全要件クリア (No. 226)
+  const handleResetAllRequirements = () => {
+    if (!window.confirm('【警告】すべての必要人数設定を「0名」にクリアしますか？\n（最適化を行うには再度必要人数を入力する必要があります）')) return;
+
+    const updatedReqs = requestData.requirements.map((req) => ({
+      ...req,
+      min_staff: 0,
+      required_roles: {},
+    }));
+
+    const updatedData: ShiftOptimizeRequest = {
+      ...requestData,
+      requirements: updatedReqs,
+    };
+
+    setRequestData(updatedData);
+    saveRequest(updatedData);
+    showToast('必要人数設定をすべて0名にリセットしました');
+  };
+
+  // 破壊的操作: 全シフト設定を初期プリセットへ完全復元
+  const handleResetToPreset = () => {
+    if (!window.confirm('【確認】シフト枠および必要人数を初期デモ設定に復元しますか？')) return;
+    const updatedData: ShiftOptimizeRequest = {
+      ...requestData,
+      shifts: DEMO_IZAKAYA_DATA.shifts,
+      requirements: DEMO_IZAKAYA_DATA.requirements,
+    };
+    setRequestData(updatedData);
+    saveRequest(updatedData);
+    showToast('初期シフト設定に復元しました');
+  };
+
   const handleSaveSlot = (e: React.FormEvent) => {
     e.preventDefault();
     if (!slotName.trim()) {
@@ -103,13 +141,32 @@ export default function ShiftsAdminPage() {
       return;
     }
 
+    const hours = normalizeNumberInput(slotHoursInput, 0);
+    if (hours < 0.5 || hours > 24) {
+      setSlotError('拘束時間は 0.5時間 〜 24時間の範囲で入力してください');
+      return;
+    }
+
+    const breakMin = normalizeNumberInput(slotBreakMinInput, 0);
+
+    // 労基法第34条 休憩時間バリデーション (No. 268)
+    if (hours > 8.0 && breakMin < 60) {
+      if (!window.confirm('【労基法警告】8時間を超える労働には60分以上の休憩付与が法律上義務付けられています。このまま保存しますか？')) {
+        return;
+      }
+    } else if (hours > 6.0 && breakMin < 45) {
+      if (!window.confirm('【労基法警告】6時間を超える労働には45分以上の休憩付与が法律上義務付けられています。このまま保存しますか？')) {
+        return;
+      }
+    }
+
     const newSlot: Shift = {
       id: slotId,
       name: slotName.trim(),
       start: slotStart,
       end: slotEnd,
-      hours: Number(slotHours),
-      break_minutes: Number(slotBreakMin),
+      hours,
+      break_minutes: breakMin,
       is_late_night: slotIsLate,
       min_interval_hours: 11,
     };
@@ -144,21 +201,23 @@ export default function ShiftsAdminPage() {
     showToast(editingSlot ? `シフト枠「${slotName}」を更新しました` : `新規枠「${slotName}」を追加しました`);
   };
 
-  // 必要人数変更ハンドラ
+  // 必要人数変更ハンドラ (全角対応)
   const handleRequirementChange = (
     day_offset: number,
     shift_id: string,
     field: 'min_staff' | 'kitchen_leader' | 'hall_leader' | 'kitchen' | 'hall',
-    value: number
+    value: number | string
   ) => {
+    const numValue = typeof value === 'string' ? normalizeNumberInput(value, 0) : value;
+
     const updatedReqs = requestData.requirements.map((req) => {
       if (req.day_offset === day_offset && req.shift_id === shift_id) {
         if (field === 'min_staff') {
-          return { ...req, min_staff: Math.max(0, value) };
+          return { ...req, min_staff: Math.min(50, Math.max(0, numValue)) };
         } else {
           const currentRoles = { ...req.required_roles };
-          if (value > 0) {
-            currentRoles[field] = value;
+          if (numValue > 0) {
+            currentRoles[field] = numValue;
           } else {
             delete currentRoles[field];
           }
@@ -209,6 +268,10 @@ export default function ShiftsAdminPage() {
     showToast('一括パターンを適用しました');
   };
 
+  // バリデーションチェック (No. 201, 208)
+  const reqTotalCheck = checkTotalRequiredStaff(requestData.requirements);
+  const roleCheck = checkMissingRequiredRoles(requestData.requirements, requestData.staff_members);
+
   return (
     <main className="container" style={{ paddingBottom: '3rem' }}>
       <AdminNavbar />
@@ -232,7 +295,7 @@ export default function ShiftsAdminPage() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           <button
             onClick={() => setActiveTab('slots')}
             className={`btn btn-sm ${activeTab === 'slots' ? 'btn-primary' : 'btn-secondary'}`}
@@ -247,6 +310,46 @@ export default function ShiftsAdminPage() {
           </button>
         </div>
       </header>
+
+      {/* No. 201: 合計必要人数0名警告バナー */}
+      {reqTotalCheck.isZero && (
+        <div
+          style={{
+            backgroundColor: 'var(--danger-bg)',
+            color: 'var(--danger)',
+            border: '1px solid var(--danger-border)',
+            padding: '0.75rem 1rem',
+            borderRadius: 'var(--radius-sm)',
+            marginBottom: '1rem',
+            fontWeight: 700,
+            fontSize: '0.875rem',
+          }}
+        >
+          ⚠ {reqTotalCheck.warning}
+        </div>
+      )}
+
+      {/* No. 208: 必須ロール保有者0名警告バナー */}
+      {roleCheck.warnings.length > 0 && (
+        <div
+          style={{
+            backgroundColor: 'var(--warning-bg)',
+            color: '#854d0e',
+            border: '1px solid var(--warning-border)',
+            padding: '0.75rem 1rem',
+            borderRadius: 'var(--radius-sm)',
+            marginBottom: '1rem',
+            fontSize: '0.8125rem',
+          }}
+        >
+          <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>⚠ 必須資格ロールの不足警告:</div>
+          <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
+            {roleCheck.warnings.map((warn, i) => (
+              <li key={i}>{warn}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {toastMessage && (
         <div
@@ -268,7 +371,12 @@ export default function ShiftsAdminPage() {
       {/* タブ1: シフト枠マスタ管理 */}
       {activeTab === 'slots' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button onClick={handleResetToPreset} className="btn btn-secondary btn-sm">
+                ↺ 初期シフト枠に復元
+              </button>
+            </div>
             <button onClick={handleOpenAddSlot} className="btn btn-primary btn-sm" data-testid="btn-add-shift-slot">
               ＋ 新しいシフト枠を追加
             </button>
@@ -382,6 +490,13 @@ export default function ShiftsAdminPage() {
               >
                 全枠一律2名設定
               </button>
+              <button
+                onClick={handleResetAllRequirements}
+                className="btn btn-danger btn-sm"
+                style={{ fontSize: '0.75rem' }}
+              >
+                全日0名クリア (全休)
+              </button>
             </div>
           </div>
 
@@ -440,18 +555,16 @@ export default function ShiftsAdminPage() {
                             style={{
                               borderLeft: '1px solid var(--border)',
                               padding: '0.5rem',
-                              backgroundColor: dateInfo.isSunday || dateInfo.isSaturday ? '#fdfcfe' : '#ffffff',
+                              backgroundColor: minStaff === 0 ? '#fbfcfe' : dateInfo.isSunday || dateInfo.isSaturday ? '#fdfcfe' : '#ffffff',
                             }}
                           >
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
                               <label style={{ fontSize: '0.75rem', fontWeight: 600 }}>必要人数:</label>
                               <input
-                                type="number"
-                                min={0}
-                                max={20}
+                                type="text"
                                 value={minStaff}
                                 onChange={(e) =>
-                                  handleRequirementChange(d, s.id, 'min_staff', Number(e.target.value))
+                                  handleRequirementChange(d, s.id, 'min_staff', e.target.value)
                                 }
                                 style={{
                                   width: '56px',
@@ -460,6 +573,7 @@ export default function ShiftsAdminPage() {
                                   border: '1px solid var(--border-dark)',
                                   borderRadius: '4px',
                                   fontWeight: 700,
+                                  textAlign: 'center',
                                 }}
                               />
                               <span style={{ fontSize: '0.75rem' }}>名</span>
@@ -586,26 +700,20 @@ export default function ShiftsAdminPage() {
                 <div className="form-group">
                   <label className="form-label">総拘束時間 (時間)</label>
                   <input
-                    type="number"
-                    step="0.5"
+                    type="text"
                     className="form-input"
-                    value={slotHours}
-                    onChange={(e) => setSlotHours(Number(e.target.value))}
-                    min={0.5}
-                    max={24}
+                    value={slotHoursInput}
+                    onChange={(e) => setSlotHoursInput(e.target.value)}
                     required
                   />
                 </div>
                 <div className="form-group">
                   <label className="form-label">休憩時間 (分)</label>
                   <input
-                    type="number"
-                    step="15"
+                    type="text"
                     className="form-input"
-                    value={slotBreakMin}
-                    onChange={(e) => setSlotBreakMin(Number(e.target.value))}
-                    min={0}
-                    max={240}
+                    value={slotBreakMinInput}
+                    onChange={(e) => setSlotBreakMinInput(e.target.value)}
                   />
                 </div>
               </div>

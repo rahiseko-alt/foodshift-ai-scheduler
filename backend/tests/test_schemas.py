@@ -135,3 +135,95 @@ def test_schedule_summary_schema_fields():
     assert summary.total_break_hours == 5.0
     assert summary.deep_night_extra_cost == 500
     assert summary.bottleneck_constraints == ["制約分析"]
+
+
+def test_staff_member_foreign_student_and_maternity_and_birth_date():
+    # 留学生は週28時間以下で有効
+    staff_valid = StaffMemberSchema(
+        id="f_valid",
+        name="留学生A",
+        hourly_wage=1000,
+        roles=["hall"],
+        is_foreign_student=True,
+        max_weekly_hours=28.0,
+        is_maternity_protection=True,
+        birth_date="2004-03-15",
+    )
+    assert staff_valid.is_foreign_student is True
+    assert staff_valid.is_maternity_protection is True
+    assert staff_valid.birth_date == "2004-03-15"
+    assert staff_valid.max_weekly_hours == 28.0
+
+    # 留学生で28時間超はバリデーションエラー
+    with pytest.raises(ValidationError):
+        StaffMemberSchema(
+            id="f_invalid",
+            name="留学生B",
+            hourly_wage=1000,
+            roles=["hall"],
+            is_foreign_student=True,
+            max_weekly_hours=28.5,
+        )
+
+    # 生年月日のフォーマット違反
+    with pytest.raises(ValidationError):
+        StaffMemberSchema(
+            id="b_invalid",
+            name="無効日付",
+            hourly_wage=1000,
+            roles=["hall"],
+            birth_date="2004/03/15",  # YYYY-MM-DD でなければならない
+        )
+
+
+def test_shift_schema_hours_consistency_validation():
+    # 整合している場合 (09:00〜17:00 = 8.0h)
+    s_valid = ShiftSchema(
+        id="s_ok",
+        name="日勤",
+        start="09:00",
+        end="17:00",
+        hours=8.0,
+    )
+    assert s_valid.hours == 8.0
+
+    # 日跨ぎ (22:00〜02:00 = 4.0h)
+    s_night = ShiftSchema(
+        id="s_night",
+        name="深夜",
+        start="22:00",
+        end="02:00",
+        hours=4.0,
+        is_late_night=True,
+    )
+    assert s_night.hours == 4.0
+
+    # 不整合 (09:00〜17:00 なのに hours=5.0) -> ValidationError
+    with pytest.raises(ValidationError):
+        ShiftSchema(
+            id="s_bad",
+            name="不整合シフト",
+            start="09:00",
+            end="17:00",
+            hours=5.0,
+        )
+
+
+def test_shift_requirement_schema_min_staff_upper_bound():
+    from app.schemas.scheduler import ShiftRequirementSchema
+
+    # min_staff=50 は有効
+    req_valid = ShiftRequirementSchema(
+        day_offset=0,
+        shift_id="s1",
+        min_staff=50,
+    )
+    assert req_valid.min_staff == 50
+
+    # min_staff=51 は上限超過エラー
+    with pytest.raises(ValidationError):
+        ShiftRequirementSchema(
+            day_offset=0,
+            shift_id="s1",
+            min_staff=51,
+        )
