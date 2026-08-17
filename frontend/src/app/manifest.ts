@@ -1,0 +1,48 @@
+import { MetadataRoute } from 'next';
+
+export default function manifest(): MetadataRoute.Manifest {
+  return {
+    name: 'FoodShift — 飲食店向けAIシフト自動作成',
+    short_name: 'FoodShift',
+    description: '労基法18歳未満深夜禁止・希望・スキルを100%遵守する飲食店特化型シフト最適化アプリ',
+    start_url: '/admin',
+    display: 'standalone',
+    background_color: '#f8fafc',
+    theme_color: '#2563eb',
+    orientation: 'portrait-primary',
+    scope: '/',
+    categories: ['business', 'productivity', 'utilities'],
+    icons: [
+      {
+        src: '/icons/icon-192x192.png',
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
+      {
+        src: '/icons/icon-512x512.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
+      {
+        src: '/icons/icon-192x192.png',
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: '/icons/icon-512x512.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: '/icons/icon.svg',
+        sizes: 'any',
+        type: 'image/svg+xml',
+        purpose: 'any',
+      },
+    ],
+  };
+}
