@@ -1,3 +1,4 @@
+import math
 import time
 from datetime import datetime, timedelta
 
@@ -233,10 +234,10 @@ def solve_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeResponse
                         )
                     )
 
-                    # 基本人件費（実働時間 × 時給）
-                    base_cost = int(round(staff.hourly_wage * net_shift_hours))
-                    # 深夜割増人件費（22:00〜05:00にかかる時間 × 時給 × 0.25）
-                    night_extra = int(round(staff.hourly_wage * 0.25 * late_hours))
+                    # 基本人件費（実働時間 × 時給 / 四捨五入）
+                    base_cost = int(math.floor(staff.hourly_wage * net_shift_hours + 0.5))
+                    # 深夜割増人件費（22:00〜05:00にかかる時間 × 時給 × 0.25 / 四捨五入）
+                    night_extra = int(math.floor(staff.hourly_wage * 0.25 * late_hours + 0.5))
 
                     total_base_labor_cost += base_cost
                     total_deep_night_extra_cost += night_extra

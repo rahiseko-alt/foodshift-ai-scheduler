@@ -272,10 +272,22 @@ def test_infeasible_schedule_returns_bottleneck_analysis():
         period=PeriodSchema(start_date="2026-09-01", days=1),
         shifts=[
             ShiftSchema(
-                id="s1", name="シフト1", start="09:00", end="17:00", hours=8.0, is_late_night=False
+                id="s1",
+                name="シフト1",
+                start="09:00",
+                end="17:00",
+                hours=8.0,
+                break_minutes=45,
+                is_late_night=False,
             ),
             ShiftSchema(
-                id="s2", name="シフト2", start="09:00", end="17:00", hours=8.0, is_late_night=False
+                id="s2",
+                name="シフト2",
+                start="09:00",
+                end="17:00",
+                hours=8.0,
+                break_minutes=45,
+                is_late_night=False,
             ),
         ],
         staff_members=[

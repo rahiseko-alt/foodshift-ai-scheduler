@@ -17,12 +17,12 @@ test.describe('CUJ-5: Demand Forecasting Simulator & Shift Integration Flow', ()
     // 3. 業態プロファイルの切り替え（カフェ・ベーカリーを選択）
     const cafeBtn = page.locator('[data-testid="btn-profile-cafe"]');
     await expect(cafeBtn).toBeVisible({ timeout: 10000 });
-    await cafeBtn.click({ force: true });
+    await cafeBtn.evaluate((b) => (b as HTMLElement).click());
 
     // 4. 居酒屋に戻す
     const izakayaBtn = page.locator('[data-testid="btn-profile-izakaya"]');
     await expect(izakayaBtn).toBeVisible();
-    await izakayaBtn.click({ force: true });
+    await izakayaBtn.evaluate((b) => (b as HTMLElement).click());
 
     // 5. 反映ボタン「⚡ この予測をシフト必要人数に反映する」を押下
     const applyBtn = page.locator('button:has-text("この予測をシフト必要人数に反映する")').first();

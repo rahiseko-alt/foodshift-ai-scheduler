@@ -11,26 +11,54 @@ class PeriodSchema(BaseModel):
 class ShiftSchema(BaseModel):
     id: str = Field(..., min_length=1, max_length=50, pattern=r"^[a-zA-Z0-9_\-]+$")
     name: str = Field(..., min_length=1, max_length=50)
-    start: str = Field(..., pattern=r"^\d{2}:\d{2}$", description="開始時刻 (HH:MM)")
-    end: str = Field(..., pattern=r"^\d{2}:\d{2}$", description="終了時刻 (HH:MM)")
-    hours: float = Field(..., ge=0.5, le=24.0, description="勤務時間数")
+    start: str = Field(
+        ...,
+        pattern=r"^([0-2]?\d|3[0-5]):(00|15|30|45)$",
+        description="開始時刻 (HH:MM / 15分刻み / 00:00〜35:45対応)",
+    )
+    end: str = Field(
+        ...,
+        pattern=r"^([0-2]?\d|3[0-5]):(00|15|30|45)$",
+        description="終了時刻 (HH:MM / 15分刻み / 00:00〜35:45対応)",
+    )
+    hours: float = Field(..., ge=0.25, le=24.0, description="拘束時間(時間 / 0.25刻み)")
     break_minutes: int = Field(default=0, ge=0, le=180, description="法定休憩時間(分)")
     is_late_night: bool = Field(default=False, description="22:00以降にかかるシフトか否か")
 
     @model_validator(mode="after")
-    def validate_hours_consistency(self) -> "ShiftSchema":
+    def validate_labor_standards_and_times(self) -> "ShiftSchema":
         start_parts = self.start.split(":")
         end_parts = self.end.split(":")
         start_min = int(start_parts[0]) * 60 + int(start_parts[1])
         end_min = int(end_parts[0]) * 60 + int(end_parts[1])
-        if end_min < start_min:
+        if end_min <= start_min:
             end_min += 24 * 60
-        calculated_hours = round((end_min - start_min) / 60.0, 2)
-        if abs(calculated_hours - self.hours) > 1e-4:
+        gross_min = end_min - start_min
+        calculated_hours = round(gross_min / 60.0, 2)
+
+        # 15分刻みおよび拘束時間整合性チェック
+        if gross_min % 15 != 0 or abs(calculated_hours - self.hours) > 1e-4:
             raise ValueError(
-                f"シフトの開始・終了時刻から計算される拘束時間 ({calculated_hours:.1f}h) と"
-                f"指定された拘束時間 ({self.hours:.1f}h) が一致しません。"
+                f"拘束時間 ({self.hours:.2f}h) が開始・終了時刻 "
+                f"({calculated_hours:.2f}h) と一致しないか、15分刻みではありません。"
             )
+
+        # 労基法第34条（法定休憩時間）バリデーション
+        if gross_min > 8 * 60 and self.break_minutes < 60:
+            raise ValueError(
+                f"拘束時間が8時間を超えるシフト ({calculated_hours:.2f}h) は、"
+                f"労基法第34条に基づき60分以上の休憩が必要です (現在: {self.break_minutes}分)。"
+            )
+        elif gross_min > 6 * 60 and self.break_minutes < 45:
+            raise ValueError(
+                f"拘束時間が6時間を超えるシフト ({calculated_hours:.2f}h) は、"
+                f"労基法第34条に基づき45分以上の休憩が必要です (現在: {self.break_minutes}分)。"
+            )
+
+        # 深夜フラグの自動同期（22:00以降または早朝5:00前にかかるか）
+        from app.engine.time_utils import is_shift_late_night
+
+        self.is_late_night = is_shift_late_night(self.start, self.end)
         return self
 
 

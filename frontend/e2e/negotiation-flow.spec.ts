@@ -9,7 +9,7 @@ test.describe('CUJ-8: Shortage Candidate Scoring & LINE Negotiation Flow', () =>
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 
     // 1. 最適化APIのモック（7日間分の完全なスケジュールと不足枠1件）をgoto前に設定
-    const fullSchedule = [];
+    const fullSchedule: Array<Record<string, unknown>> = [];
     const shifts = ['lunch', 'dinner', 'late'];
     for (let d = 0; d < 7; d++) {
       for (const s of shifts) {

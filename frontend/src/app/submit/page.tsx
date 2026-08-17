@@ -273,8 +273,12 @@ export default function SubmitPage() {
 
                   <div style={{ display: 'grid', gridTemplateColumns: `repeat(${shifts.length}, 1fr)`, gap: '0.35rem' }}>
                     {shifts.map((s) => {
-                      const isMinorLate =
-                        currentStaff?.is_minor && (s.is_late_night || s.id === 'late_night');
+                      const isEndLate = (() => {
+                        const [h, m] = (s.end || '00:00').split(':').map(Number);
+                        const [sH] = (s.start || '00:00').split(':').map(Number);
+                        return (h === 22 && (m || 0) > 0) || h > 22 || h < 5 || sH < 5;
+                      })();
+                      const isMinorLate = Boolean(currentStaff?.is_minor && (s.is_late_night || isEndLate));
                       const key = `${d}_${s.id}`;
                       const status = availabilities[key] || 'available';
 
@@ -286,8 +290,8 @@ export default function SubmitPage() {
                           onClick={() => handleToggleStatus(d, s.id)}
                           data-testid={`btn-slot-${d}-${s.id}`}
                           style={{
-                            minHeight: '44px',
-                            padding: '0.25rem 0.15rem',
+                            minHeight: '48px',
+                            padding: '0.35rem 0.2rem',
                             borderRadius: 'var(--radius-sm)',
                             border: '1px solid',
                             borderColor:
@@ -302,7 +306,7 @@ export default function SubmitPage() {
                                 : status === 'unavailable'
                                 ? 'var(--danger-bg)'
                                 : isMinorLate
-                                ? '#f1f5f9'
+                                ? '#f8fafc'
                                 : '#ffffff',
                             color:
                               status === 'want'
@@ -322,15 +326,20 @@ export default function SubmitPage() {
                             lineHeight: 1.2,
                           }}
                         >
-                          <div style={{ fontSize: '0.7rem' }}>{s.name.slice(0, 4)}</div>
-                          <div style={{ fontWeight: 700, marginTop: '2px' }}>
+                          <div style={{ fontSize: '0.7rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
+                            {s.name}
+                          </div>
+                          <div style={{ fontSize: '0.625rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                            {s.start}-{s.end}
+                          </div>
+                          <div style={{ fontWeight: 700 }}>
                             {isMinorLate
-                              ? '深夜禁止'
+                              ? '🈲 深夜禁止'
                               : status === 'want'
                               ? '◎ 希望'
                               : status === 'unavailable'
                               ? '✕ 不可'
-                              : '－'}
+                              : '－ 通常'}
                           </div>
                         </button>
                       );

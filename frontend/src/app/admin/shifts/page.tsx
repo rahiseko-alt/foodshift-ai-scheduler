@@ -39,18 +39,47 @@ export default function ShiftsAdminPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // 時刻から時間数を概算
+  // 15分刻みスナップヘルパー
+  const snapTo15Min = (timeStr: string): string => {
+    const [hStr, mStr] = timeStr.split(':');
+    const h = parseInt(hStr, 10) || 0;
+    const m = parseInt(mStr, 10) || 0;
+    const snappedM = Math.round(m / 15) * 15;
+    let finalH = h;
+    let finalM = snappedM;
+    if (snappedM === 60) {
+      finalH = (h + 1) % 24;
+      finalM = 0;
+    }
+    return `${String(finalH).padStart(2, '0')}:${String(finalM).padStart(2, '0')}`;
+  };
+
+  // 時刻から時間数を15分精度(0.25h)で自動計算 & 労基法休憩・深夜自動サジェスト
   const updateTimes = (start: string, end: string) => {
-    setSlotStart(start);
-    setSlotEnd(end);
-    const [sH, sM] = start.split(':').map(Number);
-    const [eH, eM] = end.split(':').map(Number);
+    const snappedStart = snapTo15Min(start);
+    const snappedEnd = snapTo15Min(end);
+    setSlotStart(snappedStart);
+    setSlotEnd(snappedEnd);
+
+    const [sH, sM] = snappedStart.split(':').map(Number);
+    const [eH, eM] = snappedEnd.split(':').map(Number);
     let sMin = sH * 60 + (sM || 0);
     let eMin = eH * 60 + (eM || 0);
     if (eMin <= sMin) eMin += 24 * 60;
     const diffHours = (eMin - sMin) / 60;
-    setSlotHoursInput(String(Math.round(diffHours * 10) / 10));
-    setSlotIsLate(eMin > 22 * 60 || sMin >= 22 * 60);
+    const roundedHours = Math.round(diffHours * 4) / 4;
+    setSlotHoursInput(String(roundedHours));
+
+    // 労基法第34条 休憩時間自動サジェスト
+    if (roundedHours > 8.0) {
+      setSlotBreakMinInput('60');
+    } else if (roundedHours > 6.0) {
+      setSlotBreakMinInput('45');
+    }
+
+    // 深夜自動判定 (22:00超または05:00前)
+    const isLate = eMin > 22 * 60 || sMin < 5 * 60;
+    setSlotIsLate(isLate);
   };
 
   const handleOpenAddSlot = () => {
@@ -142,8 +171,8 @@ export default function ShiftsAdminPage() {
     }
 
     const hours = normalizeNumberInput(slotHoursInput, 0);
-    if (hours < 0.5 || hours > 24) {
-      setSlotError('拘束時間は 0.5時間 〜 24時間の範囲で入力してください');
+    if (hours < 0.25 || hours > 24) {
+      setSlotError('拘束時間は 0.25時間（15分）〜 24時間の範囲で入力してください');
       return;
     }
 
@@ -151,13 +180,11 @@ export default function ShiftsAdminPage() {
 
     // 労基法第34条 休憩時間バリデーション (No. 268)
     if (hours > 8.0 && breakMin < 60) {
-      if (!window.confirm('【労基法警告】8時間を超える労働には60分以上の休憩付与が法律上義務付けられています。このまま保存しますか？')) {
-        return;
-      }
+      setSlotError('【労基法第34条違反】8時間を超えるシフトには60分以上の休憩設定が必要です。');
+      return;
     } else if (hours > 6.0 && breakMin < 45) {
-      if (!window.confirm('【労基法警告】6時間を超える労働には45分以上の休憩付与が法律上義務付けられています。このまま保存しますか？')) {
-        return;
-      }
+      setSlotError('【労基法第34条違反】6時間を超えるシフトには45分以上の休憩設定が必要です。');
+      return;
     }
 
     const newSlot: Shift = {
@@ -669,6 +696,7 @@ export default function ShiftsAdminPage() {
                   value={slotName}
                   onChange={(e) => setSlotName(e.target.value)}
                   placeholder="例: 深夜クローズ作業"
+                  data-testid="input-slot-name"
                   required
                 />
               </div>
@@ -681,6 +709,7 @@ export default function ShiftsAdminPage() {
                     className="form-input"
                     value={slotStart}
                     onChange={(e) => updateTimes(e.target.value, slotEnd)}
+                    data-testid="input-slot-start"
                     required
                   />
                 </div>
@@ -691,6 +720,7 @@ export default function ShiftsAdminPage() {
                     className="form-input"
                     value={slotEnd}
                     onChange={(e) => updateTimes(slotStart, e.target.value)}
+                    data-testid="input-slot-end"
                     required
                   />
                 </div>
@@ -704,6 +734,7 @@ export default function ShiftsAdminPage() {
                     className="form-input"
                     value={slotHoursInput}
                     onChange={(e) => setSlotHoursInput(e.target.value)}
+                    data-testid="input-slot-hours"
                     required
                   />
                 </div>
@@ -762,7 +793,7 @@ export default function ShiftsAdminPage() {
                 >
                   キャンセル
                 </button>
-                <button type="submit" className="btn btn-primary">
+                <button type="submit" className="btn btn-primary" data-testid="btn-save-slot">
                   {editingSlot ? '変更を保存' : 'シフト枠を追加'}
                 </button>
               </div>

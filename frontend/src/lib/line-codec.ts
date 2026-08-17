@@ -204,6 +204,18 @@ export function decodeSubmissionCode(
       bitVector = bitVector >> BigInt(2);
     }
 
+    // 敵対検証指摘: 全ビット消費チェック（余剰ビットがある場合はシフト枠構成不一致）
+    if (bitVector !== BigInt(0)) {
+      return {
+        version,
+        staff_id,
+        period_start,
+        availabilities: [],
+        isValid: false,
+        error: `店長側のシフト枠定義 (${shift_ids.length}枠×${days}日) と提出コードの枠構成が一致しません。最新のシフト枠で再提出してください。`,
+      };
+    }
+
     const availabilities: StaffAvailability[] = [];
     let slotIdx = 0;
     for (let d = 0; d < days; d++) {

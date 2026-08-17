@@ -104,7 +104,11 @@ def test_request_schema_min_interval_and_fixed_assignments():
     with pytest.raises(ValidationError):
         ShiftOptimizeRequest(
             period=PeriodSchema(start_date="2026-09-01", days=7),
-            shifts=[ShiftSchema(id="s1", name="S1", start="09:00", end="17:00", hours=8.0)],
+            shifts=[
+                ShiftSchema(
+                    id="s1", name="S1", start="09:00", end="17:00", hours=8.0, break_minutes=45
+                )
+            ],
             staff_members=[StaffMemberSchema(id="e1", name="A", hourly_wage=1000, roles=["hall"])],
             requirements=[],
             min_interval_hours=25.0,  # le=24.0
@@ -112,7 +116,9 @@ def test_request_schema_min_interval_and_fixed_assignments():
 
     req = ShiftOptimizeRequest(
         period=PeriodSchema(start_date="2026-09-01", days=7),
-        shifts=[ShiftSchema(id="s1", name="S1", start="09:00", end="17:00", hours=8.0)],
+        shifts=[
+            ShiftSchema(id="s1", name="S1", start="09:00", end="17:00", hours=8.0, break_minutes=45)
+        ],
         staff_members=[StaffMemberSchema(id="e1", name="A", hourly_wage=1000, roles=["hall"])],
         requirements=[],
         min_interval_hours=12.0,
@@ -176,37 +182,96 @@ def test_staff_member_foreign_student_and_maternity_and_birth_date():
         )
 
 
-def test_shift_schema_hours_consistency_validation():
-    # 整合している場合 (09:00〜17:00 = 8.0h)
-    s_valid = ShiftSchema(
-        id="s_ok",
-        name="日勤",
-        start="09:00",
-        end="17:00",
-        hours=8.0,
+def test_shift_schema_hours_consistency_and_quarter_hour():
+    # 15分刻み (10:15〜14:45 = 4.5h) 有効
+    s_quarter = ShiftSchema(
+        id="s_lunch",
+        name="仕込みランチ",
+        start="10:15",
+        end="14:45",
+        hours=4.5,
+        break_minutes=0,
     )
-    assert s_valid.hours == 8.0
+    assert s_quarter.hours == 4.5
+    assert s_quarter.is_late_night is False
 
-    # 日跨ぎ (22:00〜02:00 = 4.0h)
+    # 15分刻み日跨ぎ深夜 (22:15〜02:45 = 4.5h) 自動で is_late_night=True
     s_night = ShiftSchema(
         id="s_night",
         name="深夜",
-        start="22:00",
-        end="02:00",
-        hours=4.0,
-        is_late_night=True,
+        start="22:15",
+        end="02:45",
+        hours=4.5,
+        break_minutes=0,
     )
-    assert s_night.hours == 4.0
+    assert s_night.hours == 4.5
+    assert s_night.is_late_night is True
 
-    # 不整合 (09:00〜17:00 なのに hours=5.0) -> ValidationError
+    # 15分刻みでない時刻 (10:17) -> ValidationError (TV-8)
     with pytest.raises(ValidationError):
         ShiftSchema(
-            id="s_bad",
-            name="不整合シフト",
-            start="09:00",
-            end="17:00",
-            hours=5.0,
+            id="s_bad_time",
+            name="不正時刻",
+            start="10:17",
+            end="15:45",
+            hours=5.5,
         )
+
+    # 拘束時間不整合 (10:15〜14:45 なのに hours=4.30) -> ValidationError (TV-9)
+    with pytest.raises(ValidationError):
+        ShiftSchema(
+            id="s_bad_hours",
+            name="不整合シフト",
+            start="10:15",
+            end="14:45",
+            hours=4.30,
+        )
+
+
+def test_shift_schema_labor_law_break_validation():
+    # 拘束6.25h (10:15〜16:30) で休憩0分 -> 労基法第34条違反でエラー (TV-6)
+    with pytest.raises(ValidationError):
+        ShiftSchema(
+            id="s_no_break",
+            name="休憩なし6h超",
+            start="10:15",
+            end="16:30",
+            hours=6.25,
+            break_minutes=0,
+        )
+
+    # 拘束6.25h で休憩45分 -> 有効
+    s_valid_break = ShiftSchema(
+        id="s_break_45",
+        name="45分休憩",
+        start="10:15",
+        end="16:30",
+        hours=6.25,
+        break_minutes=45,
+    )
+    assert s_valid_break.break_minutes == 45
+
+    # 拘束8.5h (10:00〜18:30) で休憩45分 -> 8h超は60分必要なのでエラー
+    with pytest.raises(ValidationError):
+        ShiftSchema(
+            id="s_break_short",
+            name="8h超で45分休憩不足",
+            start="10:00",
+            end="18:30",
+            hours=8.5,
+            break_minutes=45,
+        )
+
+    # 拘束8.5h で休憩60分 -> 有効
+    s_valid_8h = ShiftSchema(
+        id="s_break_60",
+        name="60分休憩",
+        start="10:00",
+        end="18:30",
+        hours=8.5,
+        break_minutes=60,
+    )
+    assert s_valid_8h.break_minutes == 60
 
 
 def test_shift_requirement_schema_min_staff_upper_bound():

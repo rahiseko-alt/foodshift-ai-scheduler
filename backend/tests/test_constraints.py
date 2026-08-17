@@ -50,7 +50,13 @@ def test_minor_protection_hard_constraint_zero_late_night_assignment():
         period=PeriodSchema(start_date="2026-09-01", days=5),
         shifts=[
             ShiftSchema(
-                id="day", name="日勤", start="09:00", end="17:00", hours=8.0, is_late_night=False
+                id="day",
+                name="日勤",
+                start="09:00",
+                end="17:00",
+                hours=8.0,
+                break_minutes=45,
+                is_late_night=False,
             ),
             ShiftSchema(
                 id="night",
@@ -162,7 +168,13 @@ def test_consecutive_days_individual_limits():
         period=PeriodSchema(start_date="2026-09-01", days=7),
         shifts=[
             ShiftSchema(
-                id="day", name="日勤", start="09:00", end="17:00", hours=8.0, is_late_night=False
+                id="day",
+                name="日勤",
+                start="09:00",
+                end="17:00",
+                hours=8.0,
+                break_minutes=45,
+                is_late_night=False,
             ),
         ],
         staff_members=[
@@ -345,7 +357,13 @@ def test_period_days_limits_constraint():
         period=PeriodSchema(start_date="2026-09-01", days=5),
         shifts=[
             ShiftSchema(
-                id="day", name="日勤", start="09:00", end="17:00", hours=8.0, is_late_night=False
+                id="day",
+                name="日勤",
+                start="09:00",
+                end="17:00",
+                hours=8.0,
+                break_minutes=45,
+                is_late_night=False,
             ),
         ],
         staff_members=[
@@ -390,7 +408,13 @@ def test_fixed_assignments_warm_start():
         period=PeriodSchema(start_date="2026-09-01", days=3),
         shifts=[
             ShiftSchema(
-                id="s1", name="日勤", start="09:00", end="17:00", hours=8.0, is_late_night=False
+                id="s1",
+                name="日勤",
+                start="09:00",
+                end="17:00",
+                hours=8.0,
+                break_minutes=45,
+                is_late_night=False,
             ),
         ],
         staff_members=[
@@ -440,7 +464,7 @@ def test_foreign_student_28h_hard_constraint():
                 start="09:00",
                 end="17:00",
                 hours=8.0,
-                break_minutes=0,
+                break_minutes=45,
                 is_late_night=False,
             ),
         ],
@@ -522,6 +546,7 @@ def test_minor_max_8h_daily_limit_hard_constraint():
                 start="09:00",
                 end="18:30",
                 hours=9.5,
+                break_minutes=60,
                 is_late_night=False,
             ),
         ],
@@ -602,6 +627,7 @@ def test_missing_required_role_bottleneck_warning():
                 start="09:00",
                 end="17:00",
                 hours=8.0,
+                break_minutes=45,
                 is_late_night=False,
             ),
         ],
