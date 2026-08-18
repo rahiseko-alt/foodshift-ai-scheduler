@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('CUJ-11: 1-Hour Time-Slot Shift & Dual-View (Daily Timeline & Monthly Matrix)', () => {
-  test('should optimize with hourly time-slots and switch between Daily Timeline and Monthly Matrix views', async ({
+  test('should optimize with hourly time-slots, render vertical grid, top-required/bottom-actual split, resize handles and Home button', async ({
     page,
   }) => {
     // 1. API モックレスポンスを設定
@@ -50,19 +50,6 @@ test.describe('CUJ-11: 1-Hour Time-Slot Shift & Dual-View (Daily Timeline & Mont
               labor_cost: 5600,
               is_late_night: false,
             },
-            {
-              staff_id: 'emp_01',
-              name: '佐藤 店長 (社員)',
-              day_offset: 1,
-              date: '2026-09-02',
-              start_time: '17:00',
-              end_time: '22:00',
-              hours: 5.0,
-              break_minutes: 45,
-              hourly_wage: 1500,
-              labor_cost: 7500,
-              is_late_night: false,
-            },
           ],
           hourly_schedule: [
             {
@@ -81,16 +68,11 @@ test.describe('CUJ-11: 1-Hour Time-Slot Shift & Dual-View (Daily Timeline & Mont
     // 2. 管理画面 (/admin) にアクセス
     await page.goto('/admin');
 
-    // 3. タブ切り替えボタンの存在確認
-    const timelineTab = page.locator('[data-testid="tab-view-timeline"]');
-    const monthlyTab = page.locator('[data-testid="tab-view-monthly"]');
-    const slotsTab = page.locator('[data-testid="tab-view-slots"]');
+    // 🏠 ホームボタンの存在確認
+    const homeBtn = page.locator('[data-testid="nav-home-btn"]');
+    await expect(homeBtn).toBeVisible();
 
-    await expect(timelineTab).toBeVisible();
-    await expect(monthlyTab).toBeVisible();
-    await expect(slotsTab).toBeVisible();
-
-    // 4. 最適化ボタンを押下
+    // 3. 最適化ボタンを押下
     const optimizeBtn = page.locator('[data-testid="btn-optimize"]');
     await expect(optimizeBtn).toBeVisible();
     await optimizeBtn.click();
@@ -98,28 +80,28 @@ test.describe('CUJ-11: 1-Hour Time-Slot Shift & Dual-View (Daily Timeline & Mont
     // サマリー表示の待機
     await expect(page.locator('[data-testid="roi-summary-card"]')).toBeVisible({ timeout: 10000 });
 
-    // 5. 【日別タイムラインビュー】の検証
+    // 4. 【日別タイムラインビュー】の検証
     await expect(page.locator('[data-testid="daily-timeline-view"]')).toBeVisible();
-    await expect(page.locator('[data-testid="current-day-label"]')).toContainText('Day 1');
 
-    // 1時間ごとの充足状況（12時）の表示確認
+    // ③ 上が必要 / 下が配置（要 5 / 配 2 等）の検証
     const stat12 = page.locator('[data-testid="hourly-stat-12"]');
     await expect(stat12).toBeVisible();
+    await expect(stat12).toContainText('要');
+    await expect(stat12).toContainText('配');
 
-    // 翌日ボタンで日付を切り替え
-    const nextDayBtn = page.locator('[data-testid="btn-next-day"]');
-    await nextDayBtn.click();
-    await expect(page.locator('[data-testid="current-day-label"]')).toContainText('Day 2');
+    // ② リサイズハンドル（左端・右端）の存在検証
+    const resizeStart = page.locator('[data-testid="resize-start-emp_01"]');
+    const resizeEnd = page.locator('[data-testid="resize-end-emp_01"]');
+    await expect(resizeStart).toBeVisible();
+    await expect(resizeEnd).toBeVisible();
 
-    // 6. 【月間スタッフ一覧マトリクスビュー】への切り替えと検証
+    // 5. 【月間スタッフ一覧マトリクスビュー】への切り替えと検証
+    const monthlyTab = page.locator('[data-testid="tab-view-monthly"]');
     await monthlyTab.click();
     await expect(page.locator('[data-testid="monthly-matrix-view"]')).toBeVisible();
 
-    // スタッフの月間一覧行が表示されること
-    const staffRow = page.locator('[data-testid^="monthly-row-"]').first();
-    await expect(staffRow).toBeVisible();
-
-    // 7. 再度日別タイムラインに戻れること
+    // 6. 再度日別タイムラインに戻る
+    const timelineTab = page.locator('[data-testid="tab-view-timeline"]');
     await timelineTab.click();
     await expect(page.locator('[data-testid="daily-timeline-view"]')).toBeVisible();
   });

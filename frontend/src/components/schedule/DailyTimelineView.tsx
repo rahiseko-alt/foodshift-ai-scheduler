@@ -1,6 +1,5 @@
 'use client';
-
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   AssignedShiftTime,
   HourlyRequirement,
@@ -42,11 +41,26 @@ export default function DailyTimelineView({
     end: string;
   } | null>(null);
 
+  // マウスドラッグ伸縮の状態管理
+  const [resizing, setResizing] = useState<{
+    staffId: string;
+    edge: 'start' | 'end';
+    initialStart: number;
+    initialEnd: number;
+  } | null>(null);
+
+  const containerRef = useRef<HTMLDivElement>(null);
   const currentDateFormatted = formatDisplayDate(startDate, currentDayOffset);
 
   // 当日のアサイン
-  const dayShifts = assignedShifts.filter((s) => s.day_offset === currentDayOffset);
-  const shiftMap = new Map(dayShifts.map((s) => [s.staff_id, s]));
+  const dayShifts = useMemo(
+    () => assignedShifts.filter((s) => s.day_offset === currentDayOffset),
+    [assignedShifts, currentDayOffset]
+  );
+  const shiftMap = useMemo(
+    () => new Map(dayShifts.map((s) => [s.staff_id, s])),
+    [dayShifts]
+  );
 
   // 当日の時間別必要人数 & 実配置人数
   const reqMap = new Map(
@@ -66,178 +80,256 @@ export default function DailyTimelineView({
     actualMap.set(h, count);
   });
 
+  // ドラッグ操作による時間伸縮イベントリスナー
+  useEffect(() => {
+    if (!resizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // マウス位置から最も近い時間スロットを計算
+      const rowElem = document.querySelector(`[data-testid="timeline-slots-${resizing.staffId}"]`);
+      if (!rowElem) return;
+
+      const rect = rowElem.getBoundingClientRect();
+      const relativeX = e.clientX - rect.left;
+      const slotWidth = rect.width / TIMELINE_HOURS.length;
+      let targetHour = TIMELINE_HOURS[0] + Math.floor(relativeX / slotWidth);
+      targetHour = Math.max(9, Math.min(24, targetHour));
+
+      const currentShift = shiftMap.get(resizing.staffId);
+      if (!currentShift) return;
+
+      let newStart = parseInt(currentShift.start_time.split(':')[0], 10);
+      let newEnd = parseInt(currentShift.end_time.split(':')[0], 10);
+
+      if (resizing.edge === 'start') {
+        if (targetHour < newEnd) {
+          newStart = targetHour;
+        }
+      } else if (resizing.edge === 'end') {
+        if (targetHour > newStart) {
+          newEnd = targetHour;
+        }
+      }
+
+      if (onUpdateShiftTime) {
+        onUpdateShiftTime(
+          resizing.staffId,
+          currentDayOffset,
+          `${String(newStart).padStart(2, '0')}:00`,
+          `${String(newEnd).padStart(2, '0')}:00`
+        );
+      }
+    };
+
+    const handleMouseUp = () => {
+      setResizing(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizing, currentDayOffset, shiftMap, onUpdateShiftTime]);
+
   return (
-    <div className="card" data-testid="daily-timeline-view" style={{ overflowX: 'auto' }}>
-      {/* 1. 日付ナビゲーションバー */}
+    <div
+      className="card"
+      data-testid="daily-timeline-view"
+      ref={containerRef}
+      style={{ overflowX: 'auto', padding: '0', position: 'relative' }}
+    >
+      {/* ④ 必要/配置以上の部分を固定表示 (Sticky Header) */}
       <div
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: '1.25rem',
-          paddingBottom: '0.75rem',
-          borderBottom: '1px solid var(--border)',
-          flexWrap: 'wrap',
-          gap: '0.5rem',
+          position: 'sticky',
+          top: 0,
+          zIndex: 20,
+          backgroundColor: '#ffffff',
+          padding: '1rem 1rem 0.5rem',
+          borderBottom: '2px solid var(--border)',
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.04)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            data-testid="btn-prev-day"
-            disabled={currentDayOffset <= 0}
-            onClick={() => onDayChange(currentDayOffset - 1)}
-          >
-            ◀ 前日
-          </button>
-          <span
-            data-testid="current-day-label"
-            style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}
-          >
-            {currentDateFormatted} (Day {currentDayOffset + 1} / {totalDays})
-          </span>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            data-testid="btn-next-day"
-            disabled={currentDayOffset >= totalDays - 1}
-            onClick={() => onDayChange(currentDayOffset + 1)}
-          >
-            翌日 ▶
-          </button>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.85rem' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-            <span
-              style={{
-                width: '12px',
-                height: '12px',
-                backgroundColor: 'var(--primary)',
-                borderRadius: '3px',
-              }}
-            />
-            出勤中
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-            <span
-              style={{
-                width: '12px',
-                height: '12px',
-                backgroundColor: 'var(--danger)',
-                borderRadius: '3px',
-              }}
-            />
-            人員不足
-          </span>
-        </div>
-      </div>
-
-      {/* 2. 時間別 人員充足度（山谷グラフ） */}
-      <div
-        style={{
-          backgroundColor: 'var(--surface-hover)',
-          padding: '0.75rem 1rem',
-          borderRadius: 'var(--radius)',
-          marginBottom: '1rem',
-          border: '1px solid var(--border)',
-        }}
-      >
+        {/* 1. 日付ナビゲーションバー */}
         <div
           style={{
-            fontSize: '0.8rem',
-            fontWeight: 700,
-            color: 'var(--text-muted)',
-            marginBottom: '0.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '0.875rem',
+            paddingBottom: '0.5rem',
+            borderBottom: '1px solid var(--border)',
+            flexWrap: 'wrap',
+            gap: '0.5rem',
           }}
         >
-          📈 1時間ごとの人員充足状況（配置人数 / 必要人数）
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              data-testid="btn-prev-day"
+              disabled={currentDayOffset <= 0}
+              onClick={() => onDayChange(currentDayOffset - 1)}
+            >
+              ◀ 前日
+            </button>
+            <span
+              data-testid="current-day-label"
+              style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)' }}
+            >
+              {currentDateFormatted} (Day {currentDayOffset + 1} / {totalDays})
+            </span>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              data-testid="btn-next-day"
+              disabled={currentDayOffset >= totalDays - 1}
+              onClick={() => onDayChange(currentDayOffset + 1)}
+            >
+              翌日 ▶
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.85rem' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+              <span
+                style={{
+                  width: '12px',
+                  height: '12px',
+                  backgroundColor: 'var(--primary)',
+                  borderRadius: '3px',
+                }}
+              />
+              出勤中
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+              <span
+                style={{
+                  width: '12px',
+                  height: '12px',
+                  backgroundColor: 'var(--danger)',
+                  borderRadius: '3px',
+                }}
+              />
+              人員不足
+            </span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              ※バー両端ドラッグで伸縮
+            </span>
+          </div>
         </div>
+
+        {/* ③ 必要 vs 配置（上が必要 / 下が配置）の山谷表示 ＆ ① タテ点線 */}
         <div
           style={{
-            display: 'grid',
-            gridTemplateColumns: `180px repeat(${TIMELINE_HOURS.length}, minmax(42px, 1fr))`,
-            gap: '2px',
-            alignItems: 'end',
-            textAlign: 'center',
+            minWidth: '880px',
+            backgroundColor: 'var(--surface-hover)',
+            padding: '0.5rem 0.75rem',
+            borderRadius: 'var(--radius)',
+            border: '1px solid var(--border)',
+            marginBottom: '0.5rem',
           }}
         >
           <div
             style={{
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              textAlign: 'left',
-              color: 'var(--text-muted)',
+              display: 'grid',
+              gridTemplateColumns: `180px repeat(${TIMELINE_HOURS.length}, minmax(42px, 1fr))`,
+              gap: '0',
+              alignItems: 'center',
+              textAlign: 'center',
             }}
           >
-            必要 vs 配置
-          </div>
-          {TIMELINE_HOURS.map((h) => {
-            const req = reqMap.get(h) || 0;
-            const actual = actualMap.get(h) || 0;
-            const isShortage = actual < req;
-            const isSurplus = actual > req;
+            <div
+              style={{
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                textAlign: 'left',
+                color: 'var(--text-muted)',
+                paddingLeft: '0.5rem',
+              }}
+            >
+              <div>📈 上: 必要</div>
+              <div>&nbsp;&nbsp;&nbsp;&nbsp;下: 配置</div>
+            </div>
 
-            return (
-              <div
-                key={h}
-                data-testid={`hourly-stat-${h}`}
-                style={{
-                  padding: '0.25rem 0',
-                  borderRadius: '4px',
-                  backgroundColor: isShortage
-                    ? 'rgba(239, 68, 68, 0.15)'
-                    : isSurplus
-                    ? 'rgba(16, 185, 129, 0.12)'
-                    : 'transparent',
-                  border: isShortage ? '1px solid var(--danger)' : '1px solid transparent',
-                }}
-              >
+            {TIMELINE_HOURS.map((h) => {
+              const req = reqMap.get(h) || 0;
+              const actual = actualMap.get(h) || 0;
+              const isShortage = actual < req;
+              const isSurplus = actual > req;
+
+              return (
                 <div
+                  key={h}
+                  data-testid={`hourly-stat-${h}`}
                   style={{
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    color: isShortage
-                      ? 'var(--danger)'
+                    padding: '0.2rem 0',
+                    borderRight: '1px dashed rgba(203, 213, 225, 0.8)', // ① タテ点線
+                    backgroundColor: isShortage
+                      ? 'rgba(239, 68, 68, 0.15)'
                       : isSurplus
-                      ? 'var(--success)'
-                      : 'var(--text-main)',
+                      ? 'rgba(16, 185, 129, 0.12)'
+                      : 'transparent',
                   }}
                 >
-                  {actual}/{req}
+                  {/* 上: 必要 */}
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                    要 {req}
+                  </div>
+                  {/* 下: 配置 */}
+                  <div
+                    style={{
+                      fontSize: '0.85rem',
+                      fontWeight: 800,
+                      color: isShortage
+                        ? 'var(--danger)'
+                        : isSurplus
+                        ? 'var(--success)'
+                        : 'var(--text-main)',
+                    }}
+                  >
+                    配 {actual}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </div>
 
-      {/* 3. ガントチャート・タイムライン本体 */}
-      <div style={{ minWidth: '850px' }}>
         {/* ヘッダー時刻目盛り */}
         <div
           style={{
+            minWidth: '880px',
             display: 'grid',
             gridTemplateColumns: `180px repeat(${TIMELINE_HOURS.length}, minmax(42px, 1fr))`,
-            gap: '2px',
-            borderBottom: '2px solid var(--border)',
-            paddingBottom: '0.5rem',
-            marginBottom: '0.5rem',
+            gap: '0',
             textAlign: 'center',
             fontSize: '0.75rem',
             fontWeight: 700,
             color: 'var(--text-muted)',
+            paddingTop: '0.25rem',
           }}
         >
-          <div style={{ textAlign: 'left', paddingLeft: '0.5rem' }}>スタッフ</div>
+          <div style={{ textAlign: 'left', paddingLeft: '0.5rem' }}>スタッフ氏名</div>
           {TIMELINE_HOURS.map((h) => (
-            <div key={h}>{h}:00</div>
+            <div
+              key={h}
+              style={{
+                borderRight: '1px dashed rgba(203, 213, 225, 0.8)', // ① タテ点線
+              }}
+            >
+              {h}:00
+            </div>
           ))}
         </div>
+      </div>
 
-        {/* スタッフ行一覧 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+      {/* 3. ガントチャート・タイムライン本体（スタッフ行一覧） */}
+      <div style={{ minWidth: '880px', padding: '0.75rem 1rem 1.5rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
           {staffMembers.map((staff) => {
             const shift = shiftMap.get(staff.id);
             const startH = shift ? parseInt(shift.start_time.split(':')[0], 10) : null;
@@ -250,15 +342,16 @@ export default function DailyTimelineView({
                 style={{
                   display: 'grid',
                   gridTemplateColumns: `180px repeat(${TIMELINE_HOURS.length}, minmax(42px, 1fr))`,
-                  gap: '2px',
+                  gap: '0',
                   alignItems: 'center',
                   padding: '0.35rem 0',
                   borderRadius: '6px',
                   backgroundColor: shift ? 'transparent' : 'rgba(241, 245, 249, 0.4)',
+                  position: 'relative',
                 }}
               >
                 {/* スタッフ情報セル */}
-                <div style={{ paddingLeft: '0.5rem', minWidth: 0 }}>
+                <div style={{ paddingLeft: '0.5rem', minWidth: 0, paddingRight: '0.5rem' }}>
                   <div
                     style={{
                       fontWeight: 600,
@@ -276,53 +369,147 @@ export default function DailyTimelineView({
                   </div>
                 </div>
 
-                {/* タイムライン時間スロットセル群 */}
-                {TIMELINE_HOURS.map((h) => {
-                  const isWorking = shift && startH !== null && endH !== null && h >= startH && h < endH;
-                  const isStart = isWorking && h === startH;
-                  const isEnd = isWorking && h === endH - 1;
-
-                  return (
+                {/* タイムライン時間スロットセル群 ＆ ① タテ点線 ＆ ② 両端リサイズハンドル */}
+                <div
+                  data-testid={`timeline-slots-${staff.id}`}
+                  style={{
+                    gridColumn: `2 / span ${TIMELINE_HOURS.length}`,
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${TIMELINE_HOURS.length}, minmax(42px, 1fr))`,
+                    gap: '0',
+                    height: '36px',
+                    position: 'relative',
+                  }}
+                >
+                  {/* 背景グリッドと①タテ点線 */}
+                  {TIMELINE_HOURS.map((h) => (
                     <div
                       key={h}
                       onClick={() => {
-                        setSelectedStaffForEdit({
-                          staffId: staff.id,
-                          staffName: staff.name,
-                          start: shift ? shift.start_time : '11:00',
-                          end: shift ? shift.end_time : '15:00',
-                        });
+                        if (!shift) {
+                          setSelectedStaffForEdit({
+                            staffId: staff.id,
+                            staffName: staff.name,
+                            start: `${String(h).padStart(2, '0')}:00`,
+                            end: `${String(Math.min(24, h + 4)).padStart(2, '0')}:00`,
+                          });
+                        }
                       }}
                       style={{
-                        height: '32px',
-                        backgroundColor: isWorking ? 'var(--primary)' : 'rgba(226, 232, 240, 0.4)',
-                        borderTopLeftRadius: isStart ? '6px' : '0',
-                        borderBottomLeftRadius: isStart ? '6px' : '0',
-                        borderTopRightRadius: isEnd ? '6px' : '0',
-                        borderBottomRightRadius: isEnd ? '6px' : '0',
-                        cursor: 'pointer',
+                        borderRight: '1px dashed rgba(203, 213, 225, 0.6)', // ① タテ薄い点線
+                        backgroundColor: 'rgba(241, 245, 249, 0.3)',
+                        height: '100%',
+                        cursor: shift ? 'default' : 'pointer',
+                      }}
+                      title={!shift ? `${staff.name} を ${h}:00 からアサイン` : undefined}
+                    />
+                  ))}
+
+                  {/* ② 出勤横バー ＆ 両端リサイズハンドル */}
+                  {shift && startH !== null && endH !== null && startH < endH && (
+                    <div
+                      data-testid={`shift-bar-${staff.id}`}
+                      style={{
+                        position: 'absolute',
+                        top: '2px',
+                        bottom: '2px',
+                        left: `${((Math.max(9, startH) - 9) / TIMELINE_HOURS.length) * 100}%`,
+                        width: `${((Math.min(24, endH) - Math.max(9, startH)) / TIMELINE_HOURS.length) * 100}%`,
+                        backgroundColor: shift.is_late_night ? '#7c3aed' : 'var(--primary)',
+                        borderRadius: '6px',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
+                        justifyContent: 'space-between',
                         color: '#ffffff',
-                        fontSize: '0.7rem',
-                        fontWeight: 700,
-                        transition: 'opacity 0.2s',
+                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.12)',
+                        userSelect: 'none',
+                        zIndex: 5,
                       }}
-                      title={
-                        shift
-                          ? `${staff.name}: ${shift.start_time}〜${shift.end_time} (${shift.hours}h)`
-                          : `${staff.name}: 休み（クリックでアサイン設定）`
-                      }
                     >
-                      {isStart && (
-                        <span style={{ paddingLeft: '4px', whiteSpace: 'nowrap' }}>
-                          {shift.start_time}
-                        </span>
-                      )}
+                      {/* ② 左端リサイズハンドル */}
+                      <div
+                        data-testid={`resize-start-${staff.id}`}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          setResizing({
+                            staffId: staff.id,
+                            edge: 'start',
+                            initialStart: startH,
+                            initialEnd: endH,
+                          });
+                        }}
+                        style={{
+                          width: '10px',
+                          height: '100%',
+                          cursor: 'ew-resize',
+                          backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                          borderTopLeftRadius: '6px',
+                          borderBottomLeftRadius: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                        title="左端をドラッグして開始時間を変更"
+                      >
+                        <span style={{ fontSize: '0.6rem', opacity: 0.8 }}>◀</span>
+                      </div>
+
+                      {/* 中央テキスト & クリックで詳細編集 */}
+                      <div
+                        onClick={() => {
+                          setSelectedStaffForEdit({
+                            staffId: staff.id,
+                            staffName: staff.name,
+                            start: shift.start_time,
+                            end: shift.end_time,
+                          });
+                        }}
+                        style={{
+                          flex: 1,
+                          textAlign: 'center',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          padding: '0 4px',
+                        }}
+                        title="クリックして時刻を直接編集"
+                      >
+                        {shift.start_time}-{shift.end_time} ({shift.hours}h)
+                      </div>
+
+                      {/* ② 右端リサイズハンドル */}
+                      <div
+                        data-testid={`resize-end-${staff.id}`}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          setResizing({
+                            staffId: staff.id,
+                            edge: 'end',
+                            initialStart: startH,
+                            initialEnd: endH,
+                          });
+                        }}
+                        style={{
+                          width: '10px',
+                          height: '100%',
+                          cursor: 'ew-resize',
+                          backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                          borderTopRightRadius: '6px',
+                          borderBottomRightRadius: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                        title="右端をドラッグして終了時間を変更"
+                      >
+                        <span style={{ fontSize: '0.6rem', opacity: 0.8 }}>▶</span>
+                      </div>
                     </div>
-                  );
-                })}
+                  )}
+                </div>
               </div>
             );
           })}
@@ -347,7 +534,7 @@ export default function DailyTimelineView({
             style={{ width: '90%', maxWidth: '400px', backgroundColor: '#ffffff' }}
           >
             <h3 style={{ margin: '0 0 1rem', fontSize: '1.1rem' }}>
-              ⚙️ {selectedStaffForEdit.staffName} の勤務時間調整
+              ⚙️ {selectedStaffForEdit.staffName} の勤務時間設定
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <div>

@@ -30,7 +30,11 @@ export const AdminNavbar: React.FC = () => {
           borderBottom: '1px solid var(--border)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <Link
+          href="/admin"
+          data-testid="nav-logo-link"
+          style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none', color: 'inherit' }}
+        >
           <div
             style={{
               width: '36px',
@@ -55,16 +59,24 @@ export const AdminNavbar: React.FC = () => {
               飲食店特化型 シフト自動スケジューラー
             </div>
           </div>
-        </div>
+        </Link>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <Link
+            href="/admin"
+            className="btn btn-secondary btn-sm"
+            data-testid="nav-home-btn"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 700 }}
+          >
+            <span>🏠 ホーム</span>
+          </Link>
           <Link
             href="/submit"
             className="btn btn-secondary btn-sm"
             data-testid="nav-link-submit"
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
           >
-            <span>📱 スタッフ希望入力 (/submit)</span>
+            <span>📱 希望入力 (/submit)</span>
           </Link>
         </div>
       </div>

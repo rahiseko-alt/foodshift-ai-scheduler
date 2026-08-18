@@ -143,10 +143,11 @@ export default function SubmitPage() {
         </div>
         <Link
           href="/admin"
+          data-testid="nav-home-btn"
           className="btn btn-secondary btn-sm"
-          style={{ fontSize: '0.75rem' }}
+          style={{ fontSize: '0.75rem', fontWeight: 700 }}
         >
-          🏢 店長画面へ
+          🏠 ホーム
         </Link>
       </header>
 
