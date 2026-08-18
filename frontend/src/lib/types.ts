@@ -61,12 +61,32 @@ export interface FixedAssignment {
   shift_id: string;
 }
 
+export interface HourlyRequirement {
+  day_offset: number;
+  hour: number; // 0..23
+  min_staff: number;
+  required_roles?: Record<string, number>;
+}
+
+export interface StaffHourlyAvailability {
+  staff_id: string;
+  day_offset: number;
+  available_from: number; // 0..23
+  available_to: number; // 0..24
+  is_available: boolean;
+  is_preferred?: boolean;
+}
+
 export interface ShiftOptimizeRequest {
   period: Period;
   shifts: Shift[];
   staff_members: StaffMember[];
   requirements: ShiftRequirement[];
   availabilities: StaffAvailability[];
+  hourly_requirements?: HourlyRequirement[];
+  hourly_availabilities?: StaffHourlyAvailability[];
+  min_shift_hours?: number;
+  max_shift_hours?: number;
   min_interval_hours?: number;
   fixed_assignments?: FixedAssignment[];
 }
@@ -77,6 +97,29 @@ export interface AssignedStaff {
   assigned_role: string;
   hourly_wage: number;
   is_want_fulfilled: boolean;
+}
+
+export interface AssignedShiftTime {
+  staff_id: string;
+  name: string;
+  day_offset: number;
+  date: string;
+  start_time: string; // HH:00
+  end_time: string; // HH:00
+  hours: number;
+  break_minutes: number;
+  hourly_wage: number;
+  labor_cost: number;
+  is_late_night: boolean;
+}
+
+export interface HourlyScheduleSlot {
+  date: string;
+  day_offset: number;
+  hour: number;
+  required_count: number;
+  assigned_staff_ids: string[];
+  shortage: number;
 }
 
 export interface ScheduledShiftSlot {
@@ -115,4 +158,6 @@ export interface ShiftOptimizeResponse {
   solve_time_ms: number;
   summary: ScheduleSummary;
   schedule: ScheduledShiftSlot[];
+  assigned_shifts?: AssignedShiftTime[];
+  hourly_schedule?: HourlyScheduleSlot[];
 }

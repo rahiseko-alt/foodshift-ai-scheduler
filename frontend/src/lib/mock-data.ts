@@ -1,4 +1,73 @@
-import { ShiftOptimizeRequest, ShiftRequirement } from './types';
+import { HourlyRequirement, ShiftOptimizeRequest, ShiftRequirement, StaffHourlyAvailability } from './types';
+
+// 1時間単位の必要人数山谷（10時〜24時）
+export const generateHourlyRequirements = (days: number): HourlyRequirement[] => {
+  const reqs: HourlyRequirement[] = [];
+  // 平日と休日の時間帯別必要人数パターン
+  const weekdayPattern: Record<number, number> = {
+    10: 2, 11: 3, 12: 5, 13: 4, 14: 2, // ランチ山谷
+    15: 1, 16: 1, // アイドル
+    17: 2, 18: 4, 19: 6, 20: 6, 21: 5, 22: 3, 23: 2, // ディナー山谷
+  };
+  const weekendPattern: Record<number, number> = {
+    10: 3, 11: 5, 12: 7, 13: 6, 14: 4,
+    15: 2, 16: 3,
+    17: 4, 18: 6, 19: 8, 20: 8, 21: 6, 22: 4, 23: 2,
+  };
+
+  for (let d = 0; d < days; d++) {
+    const isWeekend = (d % 7 === 4) || (d % 7 === 5); // 金・土
+    const pattern = isWeekend ? weekendPattern : weekdayPattern;
+    for (let h = 0; h < 24; h++) {
+      const min_staff = pattern[h] || 0;
+      if (min_staff > 0) {
+        reqs.push({
+          day_offset: d,
+          hour: h,
+          min_staff,
+        });
+      }
+    }
+  }
+  return reqs;
+};
+
+// スタッフごとの出勤可能時間帯希望データ生成
+export const generateHourlyAvailabilities = (days: number): StaffHourlyAvailability[] => {
+  const avails: StaffHourlyAvailability[] = [];
+  const staffPatterns: Record<string, { from: number; to: number; daysOff: number[] }> = {
+    emp_01: { from: 10, to: 24, daysOff: [2, 9] }, // 社員店長 (水曜休)
+    emp_02: { from: 10, to: 24, daysOff: [3, 10] }, // 社員副店長 (木曜休)
+    emp_03: { from: 10, to: 16, daysOff: [0, 6, 7, 13] }, // フリーター昼
+    emp_04: { from: 17, to: 24, daysOff: [1, 8] }, // フリーター夜
+    emp_05: { from: 17, to: 23, daysOff: [2, 4, 9, 11] }, // 学生夜
+    emp_06: { from: 18, to: 24, daysOff: [0, 3, 7, 10] }, // 学生夜
+    emp_07: { from: 10, to: 15, daysOff: [5, 6, 12, 13] }, // パート主婦
+    emp_08: { from: 10, to: 15, daysOff: [0, 6, 7, 13] }, // パート主婦
+    emp_09: { from: 17, to: 22, daysOff: [1, 3, 8, 10] }, // 高校生 (22時まで)
+    emp_10: { from: 17, to: 22, daysOff: [2, 4, 9, 11] }, // 高校生 (22時まで)
+    emp_11: { from: 17, to: 24, daysOff: [3, 5, 10, 12] }, // 留学生 (週28h)
+    emp_12: { from: 11, to: 16, daysOff: [1, 4, 8, 11] }, // シニア
+    emp_13: { from: 18, to: 24, daysOff: [0, 2, 7, 9] }, // Wワーク
+    emp_14: { from: 18, to: 24, daysOff: [1, 5, 8, 12] }, // 新人
+    emp_15: { from: 17, to: 23, daysOff: [0, 4, 7, 11] }, // 新人
+  };
+
+  for (let d = 0; d < days; d++) {
+    Object.entries(staffPatterns).forEach(([staffId, p]) => {
+      const isOff = p.daysOff.includes(d);
+      avails.push({
+        staff_id: staffId,
+        day_offset: d,
+        available_from: p.from,
+        available_to: p.to,
+        is_available: !isOff,
+        is_preferred: !isOff && (d % 3 === 0),
+      });
+    });
+  }
+  return avails;
+};
 
 // デモ用居酒屋（15人×14日×3シフト）プリセットデータ
 export const DEMO_IZAKAYA_DATA: ShiftOptimizeRequest = {

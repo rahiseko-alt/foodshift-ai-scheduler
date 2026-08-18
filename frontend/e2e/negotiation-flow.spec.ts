@@ -69,6 +69,10 @@ test.describe('CUJ-8: Shortage Candidate Scoring & LINE Negotiation Flow', () =>
     await optimizeBtn.click();
     await responsePromise;
 
+    // 枠別マトリクスタブに切り替え
+    const slotsTab = page.locator('[data-testid="tab-view-slots"]');
+    await slotsTab.click();
+
     // 3. 不足アラートバナー内の「🚨 ... 不足 (代打を探す)」ボタンを押下
     const shortageAlertBtn = page.locator('[data-testid*="btn-unfilled-slot"]').first();
     await expect(shortageAlertBtn).toBeVisible({ timeout: 10000 });

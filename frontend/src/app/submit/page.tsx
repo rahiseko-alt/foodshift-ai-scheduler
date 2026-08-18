@@ -77,9 +77,27 @@ export default function SubmitPage() {
       };
     });
 
+    const updatedHourlyAvail = (requestData.hourly_availabilities || []).filter(
+      (a) => a.staff_id !== selectedStaffId
+    );
+
+    // 日ごとの希望時間帯（未成年者は22時以降制限）
+    const newHourlyAvail = Array.from({ length: days }, (_, d) => {
+      const isMinor = currentStaff?.is_minor || false;
+      return {
+        staff_id: selectedStaffId,
+        day_offset: d,
+        available_from: 10,
+        available_to: isMinor ? 22 : 24,
+        is_available: true,
+        is_preferred: d % 3 === 0,
+      };
+    });
+
     const updatedRequest: ShiftOptimizeRequest = {
       ...requestData,
       availabilities: [...otherStaffAvail, ...newStaffAvail],
+      hourly_availabilities: [...updatedHourlyAvail, ...newHourlyAvail],
     };
 
     setRequestData(updatedRequest);

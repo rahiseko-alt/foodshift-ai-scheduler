@@ -8,9 +8,12 @@ import { requestShiftOptimization } from '@/lib/api';
 import { AdminNavbar } from '@/components/navigation/AdminNavbar';
 import { RoiSummaryCard } from '@/components/summary/RoiSummaryCard';
 import { ShiftMatrix } from '@/components/schedule/ShiftMatrix';
+import DailyTimelineView from '@/components/schedule/DailyTimelineView';
+import MonthlyMatrixView from '@/components/schedule/MonthlyMatrixView';
 import { ExportModal } from '@/components/schedule/ExportModal';
 import { LineImportModal } from '@/components/schedule/LineImportModal';
 import { checkTotalRequiredStaff, checkMissingRequiredRoles } from '@/lib/validation';
+import { generateHourlyRequirements, generateHourlyAvailabilities } from '@/lib/mock-data';
 
 export default function AdminPage() {
   const [requestData, setRequestData] = useState<ShiftOptimizeRequest>(DEMO_IZAKAYA_DATA);
@@ -20,6 +23,8 @@ export default function AdminPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [isLineImportOpen, setIsLineImportOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'timeline' | 'monthly' | 'slots'>('timeline');
+  const [currentDayOffset, setCurrentDayOffset] = useState(0);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -29,6 +34,13 @@ export default function AdminPage() {
   // マウント時に LocalStorage から復元
   useEffect(() => {
     const savedReq = loadSavedRequest();
+    // 1時間単位のデータが存在しない場合はモックデータで補完
+    if (!savedReq.hourly_requirements || savedReq.hourly_requirements.length === 0) {
+      savedReq.hourly_requirements = generateHourlyRequirements(savedReq.period.days);
+    }
+    if (!savedReq.hourly_availabilities || savedReq.hourly_availabilities.length === 0) {
+      savedReq.hourly_availabilities = generateHourlyAvailabilities(savedReq.period.days);
+    }
     setRequestData(savedReq);
     const savedRes = loadSavedResponse();
     if (savedRes) {
@@ -37,17 +49,11 @@ export default function AdminPage() {
   }, []);
 
   // フロントエンド防壁・バリデーションチェック (No. 201, 208)
-  const reqTotalCheck = checkTotalRequiredStaff(requestData.requirements);
-  const roleCheck = checkMissingRequiredRoles(requestData.requirements, requestData.staff_members);
+  const reqTotalCheck = checkTotalRequiredStaff(requestData.requirements || []);
+  const roleCheck = checkMissingRequiredRoles(requestData.requirements || [], requestData.staff_members);
   const activeStaff = requestData.staff_members.filter((s) => s.is_active !== false);
 
   const handleOptimize = async () => {
-    // 防壁1: 必要人数合計0名ガード (No. 201)
-    if (reqTotalCheck.isZero) {
-      setErrorMsg('必要人数の合計が0名のため、最適化を実行できません。「シフト枠・必要人数設定」画面で必要人数を設定してください。');
-      return;
-    }
-
     // 防壁2: 在籍スタッフ0名ガード (No. 215)
     if (activeStaff.length === 0) {
       setErrorMsg('在籍（有効）スタッフが0名です。スタッフマスタで在籍スタッフを登録してください。');
@@ -60,7 +66,7 @@ export default function AdminPage() {
 
     // 非アクティブスタッフを除外して最適化ソルバーに送信 (No. 215)
     const activeStaffIds = new Set(activeStaff.map((s) => s.id));
-    const cleanAvailabilities = requestData.availabilities.filter((a) =>
+    const cleanAvailabilities = (requestData.availabilities || []).filter((a) =>
       activeStaffIds.has(a.staff_id)
     );
     const cleanFixedAssignments = requestData.fixed_assignments?.filter((f) =>
@@ -72,6 +78,12 @@ export default function AdminPage() {
       staff_members: activeStaff,
       availabilities: cleanAvailabilities,
       fixed_assignments: cleanFixedAssignments,
+      hourly_requirements: requestData.hourly_requirements?.length
+        ? requestData.hourly_requirements
+        : generateHourlyRequirements(requestData.period.days),
+      hourly_availabilities: requestData.hourly_availabilities?.length
+        ? requestData.hourly_availabilities
+        : generateHourlyAvailabilities(requestData.period.days),
     };
 
     try {
@@ -97,6 +109,53 @@ export default function AdminPage() {
   const handleResponseChange = (updatedResponse: ShiftOptimizeResponse) => {
     setResponse(updatedResponse);
     saveResponse(updatedResponse);
+  };
+
+  const handleUpdateShiftTime = (staffId: string, dayOffset: number, startTime: string, endTime: string) => {
+    if (!response || !response.assigned_shifts) return;
+
+    const startH = parseInt(startTime.split(':')[0], 10);
+    const endH = parseInt(endTime.split(':')[0], 10);
+    const hours = Math.max(0, endH - startH);
+
+    const existingIdx = response.assigned_shifts.findIndex(
+      (s) => s.staff_id === staffId && s.day_offset === dayOffset
+    );
+
+    const updatedAssigned = [...response.assigned_shifts];
+    const staff = requestData.staff_members.find((st) => st.id === staffId);
+    const wage = staff ? staff.hourly_wage : 1000;
+
+    if (existingIdx >= 0) {
+      updatedAssigned[existingIdx] = {
+        ...updatedAssigned[existingIdx],
+        start_time: startTime,
+        end_time: endTime,
+        hours,
+        labor_cost: hours * wage,
+      };
+    } else if (staff) {
+      updatedAssigned.push({
+        staff_id: staffId,
+        name: staff.name,
+        day_offset: dayOffset,
+        date: '',
+        start_time: startTime,
+        end_time: endTime,
+        hours,
+        break_minutes: 0,
+        hourly_wage: wage,
+        labor_cost: hours * wage,
+        is_late_night: endH > 22,
+      });
+    }
+
+    const updatedRes: ShiftOptimizeResponse = {
+      ...response,
+      assigned_shifts: updatedAssigned,
+    };
+    handleResponseChange(updatedRes);
+    showToast(`${staff?.name || ''} の勤務時間を更新しました`);
   };
 
   return (
@@ -284,13 +343,77 @@ export default function AdminPage() {
         }}
       />
 
-      {/* シフトマトリクス表 */}
-      <ShiftMatrix
-        request={requestData}
-        response={response}
-        onResponseChange={(updatedRes) => setResponse(updatedRes)}
-        showToast={showToast}
-      />
+      {/* 表示モード切り替えタブ */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '0.5rem',
+          marginBottom: '1rem',
+          borderBottom: '1px solid var(--border)',
+          paddingBottom: '0.5rem',
+        }}
+      >
+        <button
+          type="button"
+          data-testid="tab-view-timeline"
+          onClick={() => setViewMode('timeline')}
+          className={`btn btn-sm ${viewMode === 'timeline' ? 'btn-primary' : 'btn-secondary'}`}
+          style={{ fontWeight: 700 }}
+        >
+          📅 日別タイムライン (ガントチャート)
+        </button>
+        <button
+          type="button"
+          data-testid="tab-view-monthly"
+          onClick={() => setViewMode('monthly')}
+          className={`btn btn-sm ${viewMode === 'monthly' ? 'btn-primary' : 'btn-secondary'}`}
+          style={{ fontWeight: 700 }}
+        >
+          📊 月間スタッフ一覧マトリクス ({requestData.period.days}日間)
+        </button>
+        <button
+          type="button"
+          data-testid="tab-view-slots"
+          onClick={() => setViewMode('slots')}
+          className={`btn btn-sm ${viewMode === 'slots' ? 'btn-primary' : 'btn-secondary'}`}
+          style={{ fontWeight: 700 }}
+        >
+          ⏰ 枠別マトリクス (従来ビュー)
+        </button>
+      </div>
+
+      {/* 選択されたビューの描画 */}
+      {viewMode === 'timeline' && (
+        <DailyTimelineView
+          currentDayOffset={currentDayOffset}
+          startDate={requestData.period.start_date}
+          totalDays={requestData.period.days}
+          onDayChange={(offset) => setCurrentDayOffset(offset)}
+          staffMembers={activeStaff}
+          assignedShifts={response?.assigned_shifts || []}
+          hourlyRequirements={requestData.hourly_requirements || []}
+          hourlySchedule={response?.hourly_schedule || []}
+          onUpdateShiftTime={handleUpdateShiftTime}
+        />
+      )}
+
+      {viewMode === 'monthly' && (
+        <MonthlyMatrixView
+          startDate={requestData.period.start_date}
+          totalDays={requestData.period.days}
+          staffMembers={activeStaff}
+          assignedShifts={response?.assigned_shifts || []}
+        />
+      )}
+
+      {viewMode === 'slots' && (
+        <ShiftMatrix
+          request={requestData}
+          response={response}
+          onResponseChange={(updatedRes) => setResponse(updatedRes)}
+          showToast={showToast}
+        />
+      )}
     </main>
   );
 }

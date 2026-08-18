@@ -108,6 +108,22 @@ class StaffAvailabilitySchema(BaseModel):
     )
 
 
+class HourlyRequirementSchema(BaseModel):
+    day_offset: int = Field(..., ge=0, le=30, description="開始日からの日数オフセット")
+    hour: int = Field(..., ge=0, le=23, description="時間 (0〜23時の1時間スロット)")
+    min_staff: int = Field(..., ge=0, le=50, description="必要人数")
+    required_roles: dict[str, int] = Field(default_factory=dict, description="特定ロールの必須人数")
+
+
+class StaffHourlyAvailabilitySchema(BaseModel):
+    staff_id: str = Field(..., min_length=1, max_length=50)
+    day_offset: int = Field(..., ge=0, le=30)
+    available_from: int = Field(default=0, ge=0, le=23, description="勤務可能開始時刻 (0〜23)")
+    available_to: int = Field(default=24, ge=0, le=24, description="勤務可能終了時刻 (0〜24)")
+    is_available: bool = Field(default=True, description="出勤可能か (Falseなら終日不可)")
+    is_preferred: bool = Field(default=False, description="特に希望する日か")
+
+
 class FixedAssignmentSchema(BaseModel):
     staff_id: str = Field(..., min_length=1, max_length=50, description="スタッフID")
     day_offset: int = Field(..., ge=0, le=30, description="開始日からの日数オフセット")
@@ -116,16 +132,32 @@ class FixedAssignmentSchema(BaseModel):
 
 class ShiftOptimizeRequest(BaseModel):
     period: PeriodSchema
-    shifts: list[ShiftSchema] = Field(..., min_length=1, max_length=20)
+    shifts: list[ShiftSchema] = Field(default_factory=list, max_length=20)
     staff_members: list[StaffMemberSchema] = Field(..., min_length=1, max_length=50)
-    requirements: list[ShiftRequirementSchema] = Field(..., max_length=500)
+    requirements: list[ShiftRequirementSchema] = Field(default_factory=list, max_length=500)
     availabilities: list[StaffAvailabilitySchema] = Field(default_factory=list, max_length=1000)
+    hourly_requirements: list[HourlyRequirementSchema] = Field(
+        default_factory=list, max_length=1000, description="1時間ごとの必要人数山谷"
+    )
+    hourly_availabilities: list[StaffHourlyAvailabilitySchema] = Field(
+        default_factory=list, max_length=1000, description="スタッフの時間帯希望"
+    )
+    min_shift_hours: int = Field(default=3, ge=1, le=12, description="1回の最低連続勤務時間(h)")
+    max_shift_hours: int = Field(default=8, ge=1, le=16, description="1回の最大連続勤務時間(h)")
     min_interval_hours: float = Field(
         default=11.0, ge=0.0, le=24.0, description="勤務間インターバル最小時間(h)"
     )
     fixed_assignments: list[FixedAssignmentSchema] = Field(
         default_factory=list, description="Warm Start用固定割当 (staff_id, day_offset, shift_id)"
     )
+
+    @model_validator(mode="after")
+    def validate_shift_or_hourly(self) -> "ShiftOptimizeRequest":
+        if not self.shifts and not self.hourly_requirements:
+            raise ValueError(
+                "シフト枠(shifts)または1時間単位必要人数(hourly_requirements)のいずれかを指定してください。"
+            )
+        return self
 
 
 # レスポンススキーマ
@@ -142,6 +174,29 @@ class ScheduledShiftSlotSchema(BaseModel):
     day_offset: int
     shift_id: str
     assigned_staff: list[AssignedStaffSchema]
+
+
+class AssignedShiftTimeSchema(BaseModel):
+    staff_id: str
+    name: str
+    day_offset: int
+    date: str
+    start_time: str = Field(..., description="出勤時刻 (HH:00)")
+    end_time: str = Field(..., description="退勤時刻 (HH:00)")
+    hours: float = Field(..., description="実労働時間(h)")
+    break_minutes: int = Field(default=0, description="休憩時間(分)")
+    hourly_wage: int
+    labor_cost: int = Field(..., description="人件費(円)")
+    is_late_night: bool = Field(default=False, description="深夜業(22時以降)を含むか")
+
+
+class HourlyScheduleSlotSchema(BaseModel):
+    date: str
+    day_offset: int
+    hour: int
+    required_count: int
+    assigned_staff_ids: list[str] = Field(default_factory=list)
+    shortage: int = 0
 
 
 class UnfilledRequirementSchema(BaseModel):
@@ -171,4 +226,10 @@ class ShiftOptimizeResponse(BaseModel):
     status: Literal["OPTIMAL", "FEASIBLE_WITH_SHORTAGE", "INFEASIBLE", "ERROR"]
     solve_time_ms: int
     summary: ScheduleSummarySchema
-    schedule: list[ScheduledShiftSlotSchema]
+    schedule: list[ScheduledShiftSlotSchema] = Field(default_factory=list)
+    assigned_shifts: list[AssignedShiftTimeSchema] = Field(
+        default_factory=list, description="1時間タイムスロットで決定した各個人の出退勤時間一覧"
+    )
+    hourly_schedule: list[HourlyScheduleSlotSchema] = Field(
+        default_factory=list, description="1時間ごとの時間帯別配置状況"
+    )

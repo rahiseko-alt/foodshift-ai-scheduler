@@ -51,7 +51,9 @@ test.describe('CUJ-1: Admin Schedule Optimization & Sharing Flow', () => {
     // 1. /admin にアクセス
     await page.goto('/admin');
 
-    // 2. プリセットデータ描画確認
+    // 2. 枠別マトリクスタブに切り替えてプリセットデータ描画確認
+    const slotsTab = page.locator('[data-testid="tab-view-slots"]');
+    await slotsTab.click();
     const matrix = page.locator('[data-testid="shift-matrix"]');
     await expect(matrix).toBeVisible();
 
@@ -86,6 +88,8 @@ test.describe('CUJ-1: Admin Schedule Optimization & Sharing Flow', () => {
     await page.reload();
     await expect(costSummary).toBeVisible();
     await expect(costSummary).toContainText('人件費合計');
+
+    await slotsTab.click();
     await expect(matrix).toBeVisible();
   });
 });

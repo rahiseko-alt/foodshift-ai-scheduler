@@ -13,6 +13,10 @@ export interface DateInfo {
 /** 飲食店・深夜営業の標準締め時刻 (朝 05:00 前のシフトは前営業日扱い) */
 export const BUSINESS_DAY_CUTOFF_HOUR = 5;
 
+export function formatDisplayDate(startDateStr: string, dayOffset: number): string {
+  return getDateInfo(startDateStr, dayOffset).dateFormatted;
+}
+
 /**
  * 開始日とオフセットから DateInfo を生成する
  */

@@ -7,6 +7,7 @@ from ortools.sat.python import cp_model
 from app.engine.constraints import build_optimization_model
 from app.engine.time_utils import calculate_late_night_hours
 from app.schemas.scheduler import (
+    AssignedShiftTimeSchema,
     AssignedStaffSchema,
     ScheduledShiftSlotSchema,
     ScheduleSummarySchema,
@@ -151,6 +152,12 @@ def _analyze_shortage_bottlenecks(
 
 def solve_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeResponse:
     """OR-Tools CP-SAT ソルバーを実行し、シフト最適化結果を生成する。"""
+    # 1時間ごとのタイムスロット指定がある場合はタイムスロット連続最適化を実行
+    if request.hourly_requirements:
+        from app.engine.hourly_solver import solve_hourly_shift_schedule
+
+        return solve_hourly_shift_schedule(request)
+
     start_time = time.time()
     model, work, day_worked, obj_vars, obj_coeffs, under_cover_vars = build_optimization_model(
         request
@@ -192,6 +199,7 @@ def solve_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeResponse
     avail_map = {(a.staff_id, a.day_offset, a.shift_id): a.status for a in request.availabilities}
 
     schedule_slots: list[ScheduledShiftSlotSchema] = []
+    assigned_shifts_list: list[AssignedShiftTimeSchema] = []
     total_base_labor_cost = 0
     total_deep_night_extra_cost = 0
     total_work_hours = 0.0
@@ -238,6 +246,22 @@ def solve_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeResponse
                     base_cost = int(math.floor(staff.hourly_wage * net_shift_hours + 0.5))
                     # 深夜割増人件費（22:00〜05:00にかかる時間 × 時給 × 0.25 / 四捨五入）
                     night_extra = int(math.floor(staff.hourly_wage * 0.25 * late_hours + 0.5))
+
+                    assigned_shifts_list.append(
+                        AssignedShiftTimeSchema(
+                            staff_id=staff.id,
+                            name=staff.name,
+                            day_offset=d,
+                            date=current_date_str,
+                            start_time=shift.start,
+                            end_time=shift.end,
+                            hours=net_shift_hours,
+                            break_minutes=shift.break_minutes,
+                            hourly_wage=staff.hourly_wage,
+                            labor_cost=base_cost + night_extra,
+                            is_late_night=shift.is_late_night or late_hours > 0,
+                        )
+                    )
 
                     total_base_labor_cost += base_cost
                     total_deep_night_extra_cost += night_extra
@@ -299,8 +323,8 @@ def solve_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeResponse
         solve_time_ms=elapsed_ms,
         summary=ScheduleSummarySchema(
             total_labor_cost=total_labor_cost,
-            total_work_hours=round(total_work_hours, 1),
-            total_break_hours=round(total_break_hours, 1),
+            total_work_hours=round(total_work_hours, 2),
+            total_break_hours=round(total_break_hours, 2),
             deep_night_extra_cost=total_deep_night_extra_cost,
             wants_fulfillment_rate=round(wants_rate, 2),
             max_staff_day_difference=day_diff,
@@ -308,4 +332,5 @@ def solve_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeResponse
             bottleneck_constraints=bottleneck_constraints,
         ),
         schedule=schedule_slots,
+        assigned_shifts=assigned_shifts_list,
     )

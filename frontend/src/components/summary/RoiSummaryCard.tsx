@@ -14,7 +14,7 @@ export const RoiSummaryCard: React.FC<Props> = ({ summary, solveTimeMs }) => {
   const hasShortage = summary.unfilled_requirements.length > 0;
 
   return (
-    <div style={{ marginBottom: '1.5rem' }}>
+    <div data-testid="roi-summary-card" style={{ marginBottom: '1.5rem' }}>
       {hasShortage && (
         <div
           data-testid="shortage-alert"
