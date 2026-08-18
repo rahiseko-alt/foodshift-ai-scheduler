@@ -149,7 +149,7 @@ export default function PwaInstallPrompt() {
           style={{ fontSize: '0.75rem', padding: '0.35rem 0.5rem' }}
           aria-label="閉じる"
         >
-          ✕
+          不可
         </button>
       </div>
     </aside>

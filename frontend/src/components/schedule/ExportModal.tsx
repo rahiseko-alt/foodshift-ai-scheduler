@@ -53,7 +53,7 @@ export const ExportModal: React.FC<Props> = ({ request, response, onRestore }) =
     for (let d = 0; d < request.period.days; d++) {
       const daySlots = response.schedule.filter((s) => s.day_offset === d);
       const dateStr = daySlots[0]?.date || `Day ${d + 1}`;
-      lines.push(`📅 ${dateStr}`);
+      lines.push(`${dateStr}`);
 
       for (const slot of daySlots) {
         const shiftObj = request.shifts.find((s) => s.id === slot.shift_id);
@@ -215,8 +215,8 @@ export const ExportModal: React.FC<Props> = ({ request, response, onRestore }) =
               data-testid="btn-copy-line"
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
             >
-              <span>💬 LINE共有用テキスト作成</span>
-              {copied && <span style={{ color: 'var(--success)', fontWeight: 'bold' }}>✓ コピー完了</span>}
+              <span>LINE共有用テキスト作成</span>
+              {copied && <span style={{ color: 'var(--success)', fontWeight: 'bold' }}>コピー完了</span>}
             </button>
 
             <button
@@ -225,7 +225,7 @@ export const ExportModal: React.FC<Props> = ({ request, response, onRestore }) =
               data-testid="btn-download-csv"
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
             >
-              <span>📥 CSVダウンロード (Excel用)</span>
+              <span>CSVダウンロード (Excel用)</span>
             </button>
           </>
         )}
@@ -236,7 +236,7 @@ export const ExportModal: React.FC<Props> = ({ request, response, onRestore }) =
           data-testid="btn-open-backup-modal"
           style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
         >
-          <span>📦 データバックアップ ＆ 復元</span>
+          <span>データバックアップ ＆ 復元</span>
         </button>
       </div>
 
@@ -256,7 +256,7 @@ export const ExportModal: React.FC<Props> = ({ request, response, onRestore }) =
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem' }}>
               <h2 style={{ fontSize: '1.125rem', fontWeight: 700 }}>
-                📦 店舗データ完全バックアップ ＆ 復元
+                店舗データ完全バックアップ ＆ 復元
               </h2>
               <button
                 onClick={() => {
@@ -266,7 +266,7 @@ export const ExportModal: React.FC<Props> = ({ request, response, onRestore }) =
                 className="btn btn-secondary btn-sm"
                 style={{ padding: '0.25rem 0.5rem' }}
               >
-                ✕
+                不可
               </button>
             </div>
 
@@ -304,7 +304,7 @@ export const ExportModal: React.FC<Props> = ({ request, response, onRestore }) =
                 }}
               >
                 <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, marginBottom: '0.5rem' }}>
-                  📤 端末外へ一括退避 (JSON)
+                  端末外へ一括退避 (JSON)
                 </h3>
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
                   スタッフ定義・希望・シフト確定結果・履歴スナップショットを含む完全JSONを出力します。
@@ -328,7 +328,7 @@ export const ExportModal: React.FC<Props> = ({ request, response, onRestore }) =
                 }}
               >
                 <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, marginBottom: '0.5rem' }}>
-                  📥 ファイルから復元
+                  ファイルから復元
                 </h3>
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
                   保存済みの FoodShift バックアップJSONを読み込み、即座に復元します。
@@ -355,7 +355,7 @@ export const ExportModal: React.FC<Props> = ({ request, response, onRestore }) =
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                 <h3 style={{ fontSize: '0.9375rem', fontWeight: 600 }}>
-                  🕒 履歴スナップショット（IndexedDB）
+                  履歴スナップショット（IndexedDB）
                 </h3>
                 <button
                   onClick={handleSaveCurrentSnapshot}

@@ -12,7 +12,7 @@ export default function GuidePage() {
         {/* ヘッダー */}
         <div style={{ marginBottom: '2rem' }}>
           <h1 style={{ fontSize: '1.75rem', fontWeight: 800, letterSpacing: '-0.02em', marginBottom: '0.5rem' }}>
-            📖 FoodShift 機能解説 ＆ 数理モデル仕様リファレンス
+            FoodShift 機能解説 ＆ 数理モデル仕様リファレンス
           </h1>
           <p style={{ fontSize: '0.925rem', color: 'var(--text-muted)' }}>
             Google OR-Tools CP-SAT（数理最適化ソルバー）を用いたシフト自動生成ロジック、法令遵守ルール、現場運用の手順を詳細に解説します。
@@ -22,7 +22,7 @@ export default function GuidePage() {
         {/* 目次クイックジャンプ */}
         <div className="card" style={{ marginBottom: '2rem', backgroundColor: 'var(--bg-card)' }}>
           <div style={{ fontSize: '0.875rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--text-main)' }}>
-            📌 目次
+            目次
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.5rem', fontSize: '0.875rem' }}>
             <a href="#architecture" style={{ color: 'var(--primary)', textDecoration: 'none' }}>
@@ -46,20 +46,20 @@ export default function GuidePage() {
         {/* セクション 1: アーキテクチャ */}
         <section id="architecture" className="card" style={{ marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span>⚡</span> 1. 完全0円インフラ ＆ 完全ステートレス設計
+            <span></span> 1. 完全0円インフラ ＆ 完全ステートレス設計
           </h2>
           <p style={{ fontSize: '0.875rem', lineHeight: '1.7', color: 'var(--text-main)', marginBottom: '1rem' }}>
             FoodShift はサーバー（Render）にデータベースを持たず、すべてのデータ（スタッフ情報・シフト枠・提出希望・確定シフト）をお使いのブラウザ（LocalStorage）で安全に保持・管理します。
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
             <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '1rem', backgroundColor: 'var(--bg-subtle)' }}>
-              <div style={{ fontWeight: 700, fontSize: '0.875rem', marginBottom: '0.25rem' }}>🛡 データ消失ゼロ保証</div>
+              <div style={{ fontWeight: 700, fontSize: '0.875rem', marginBottom: '0.25rem' }}>データ消失ゼロ保証</div>
               <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
                 無料サーバーが15分でスリープ・再起動しても、入力データや作成したシフト表は1バイトも消失しません。
               </div>
             </div>
             <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '1rem', backgroundColor: 'var(--bg-subtle)' }}>
-              <div style={{ fontWeight: 700, fontSize: '0.875rem', marginBottom: '0.25rem' }}>🔒 プライバシー保護</div>
+              <div style={{ fontWeight: 700, fontSize: '0.875rem', marginBottom: '0.25rem' }}>プライバシー保護</div>
               <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
                 時給やスタッフの個人情報はクラウドDBに永続保存されず、最適化計算時のみ一時的に送信されます。
               </div>
@@ -70,7 +70,7 @@ export default function GuidePage() {
         {/* セクション 2: Hard制約 */}
         <section id="hard-constraints" className="card" style={{ marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span>⚖️</span> 2. 100%厳守ルール（Hard制約）
+            <span></span> 2. 100%厳守ルール（Hard制約）
           </h2>
           <p style={{ fontSize: '0.875rem', lineHeight: '1.7', color: 'var(--text-main)', marginBottom: '1rem' }}>
             生成AI（LLM）のような「確率的な出力」ではなく、数理最適化ソルバー（OR-Tools CP-SAT）が<strong>数理モデルとして例外なく100%厳守</strong>するルールです。
@@ -91,7 +91,7 @@ export default function GuidePage() {
                 ② 不可シフト（Unavailable）の完全遵守
               </div>
               <div style={{ fontSize: '0.8125rem', color: 'var(--text-main)', marginTop: '0.25rem' }}>
-                スタッフが「✕（不可）」と提出した日・時間帯には、人手不足時であっても絶対にシフトを割り当てません。
+                スタッフが「不可（不可）」と提出した日・時間帯には、人手不足時であっても絶対にシフトを割り当てません。
               </div>
             </div>
 
@@ -127,7 +127,7 @@ export default function GuidePage() {
         {/* セクション 3: Soft制約・目的関数 */}
         <section id="soft-constraints" className="card" style={{ marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span>🎯</span> 3. AI最適化バランス（目的関数）
+            <span></span> 3. AI最適化バランス（目的関数）
           </h2>
           <p style={{ fontSize: '0.875rem', lineHeight: '1.7', color: 'var(--text-main)', marginBottom: '1rem' }}>
             数式によって定義された重み付けに基づき、全条件を満たす中で最も理想的な解を数秒で算出します。
@@ -156,7 +156,7 @@ export default function GuidePage() {
                 <tr>
                   <td style={{ fontWeight: 700, color: 'var(--success)' }}>希望シフト (want) 充足ボーナス</td>
                   <td style={{ fontWeight: 700 }}>中 (300)</td>
-                  <td>スタッフが「◎（強く希望）」を出した枠を優先的に割り当て、スタッフ満足度を高めます。</td>
+                  <td>スタッフが「希望（強く希望）」を出した枠を優先的に割り当て、スタッフ満足度を高めます。</td>
                 </tr>
                 <tr>
                   <td style={{ fontWeight: 700, color: 'var(--info)' }}>優先ペア (GOOD) 同時出勤ボーナス</td>
@@ -176,13 +176,13 @@ export default function GuidePage() {
         {/* セクション 4: 現場特化機能 */}
         <section id="advanced-features" className="card" style={{ marginBottom: '2rem' }}>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span>🛠</span> 4. 現場特化機能 ＆ エッジケース対応
+            <span></span> 4. 現場特化機能 ＆ エッジケース対応
           </h2>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
             <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '1rem' }}>
               <div style={{ fontWeight: 700, fontSize: '0.875rem', marginBottom: '0.5rem' }}>
-                🌙 法定休憩 ＆ 深夜割増 (25%) 精密計算
+                法定休憩 ＆ 深夜割増 (25%) 精密計算
               </div>
               <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', lineHeight: '1.6' }}>
                 シフトごとの休憩時間を自動控除した「実働時間」で集計。22:00〜05:00 にかかる労働時間は自動で25%割増人件費として分離計算されます。
@@ -191,7 +191,7 @@ export default function GuidePage() {
 
             <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '1rem' }}>
               <div style={{ fontWeight: 700, fontSize: '0.875rem', marginBottom: '0.5rem' }}>
-                🔄 突発欠勤の再最適化 (Warm Start)
+                突発欠勤の再最適化 (Warm Start)
               </div>
               <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', lineHeight: '1.6' }}>
                 当日の急な欠勤時、既に確定した他スタッフのシフトを固定したまま、穴埋めスロットのみを最小限の変更コストで再計算します。
@@ -200,7 +200,7 @@ export default function GuidePage() {
 
             <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '1rem' }}>
               <div style={{ fontWeight: 700, fontSize: '0.875rem', marginBottom: '0.5rem' }}>
-                💰 年収の壁 (103万/130万) 残枠ゲージ
+                年収の壁 (103万/130万) 残枠ゲージ
               </div>
               <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', lineHeight: '1.6' }}>
                 学生や主婦スタッフの扶養内年収残枠を可視化。今月確定シフトの想定給与を加算し、扶養超過ペースを未然に警告します。
@@ -209,7 +209,7 @@ export default function GuidePage() {
 
             <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', padding: '1rem' }}>
               <div style={{ fontWeight: 700, fontSize: '0.875rem', marginBottom: '0.5rem' }}>
-                🔍 ボトルネック要因分析
+                ボトルネック要因分析
               </div>
               <div style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', lineHeight: '1.6' }}>
                 人員不足が発生した際、「金曜遅番: 不可希望4名 / 年少者除外2名」など、なぜ人が足りないのかをAIがテキストで明示します。
@@ -221,14 +221,14 @@ export default function GuidePage() {
         {/* セクション 5: 画面の使い方 */}
         <section id="how-to-use" className="card">
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span>📱</span> 5. 画面の使い方 ＆ 現場オペレーション
+            <span></span> 5. 画面の使い方 ＆ 現場オペレーション
           </h2>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', fontSize: '0.875rem', lineHeight: '1.6' }}>
             <div>
               <strong>Step 1: スタッフマスタ・シフト枠の登録</strong>
               <p style={{ margin: '0.25rem 0 0', color: 'var(--text-muted)' }}>
-                「👥 スタッフマスタ管理」で時給・ロール・NGペア・年収の壁を設定し、「⏰ シフト枠・必要人数設定」で時間帯と日別の必要人数を調整します。
+                「スタッフマスタ管理」で時給・ロール・NGペア・年収の壁を設定し、「シフト枠・必要人数設定」で時間帯と日別の必要人数を調整します。
               </p>
             </div>
 
@@ -242,7 +242,7 @@ export default function GuidePage() {
             <div>
               <strong>Step 3: 店長がワンクリックで最適化 ＆ 微調整</strong>
               <p style={{ margin: '0.25rem 0 0', color: 'var(--text-muted)' }}>
-                管理者画面で「⚡ シフトを最適化する」を押すと、約2〜3秒で確定シフトが描画されます。セルをクリックして手動でスタッフの追加・削除も可能です。
+                管理者画面で「シフトを最適化する」を押すと、約2〜3秒で確定シフトが描画されます。セルをクリックして手動でスタッフの追加・削除も可能です。
               </p>
             </div>
 

@@ -163,7 +163,7 @@ export const LineImportModal: React.FC<LineImportModalProps> = ({
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{ fontSize: '1.25rem' }}>📥</span>
+            <span style={{ fontSize: '1.25rem' }}></span>
             <div>
               <h2 style={{ fontSize: '1.125rem', fontWeight: 800, margin: 0 }}>
                 LINE提出データ一括取込
@@ -183,7 +183,7 @@ export const LineImportModal: React.FC<LineImportModalProps> = ({
               color: 'var(--text-muted)',
             }}
           >
-            ✕
+            不可
           </button>
         </div>
 
@@ -214,7 +214,7 @@ export const LineImportModal: React.FC<LineImportModalProps> = ({
               className="btn btn-secondary"
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
             >
-              <span>🔍 提出コードを解析する</span>
+              <span>提出コードを解析する</span>
             </button>
           </div>
 
@@ -236,7 +236,7 @@ export const LineImportModal: React.FC<LineImportModalProps> = ({
                     fontSize: '0.875rem',
                   }}
                 >
-                  ⚠ 有効な提出コード（`FS1|...`）が見つかりませんでした。
+                  有効な提出コード（`FS1|...`）が見つかりませんでした。
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -269,28 +269,28 @@ export const LineImportModal: React.FC<LineImportModalProps> = ({
                             </span>
                             {res.status === 'valid' && (
                               <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>
-                                ✓ 取込可能
+                                取込可能
                               </span>
                             )}
                             {res.status === 'unknown_staff' && (
                               <span className="badge badge-danger" style={{ fontSize: '0.7rem' }}>
-                                ⚠ 未登録スタッフ
+                                未登録スタッフ
                               </span>
                             )}
                             {res.status === 'period_mismatch' && (
                               <span className="badge badge-danger" style={{ fontSize: '0.7rem' }}>
-                                ⚠ 期間不一致 ({res.decoded.period_start})
+                                期間不一致 ({res.decoded.period_start})
                               </span>
                             )}
                             {res.status === 'invalid' && (
                               <span className="badge badge-danger" style={{ fontSize: '0.7rem' }}>
-                                ⚠ コード破損
+                                コード破損
                               </span>
                             )}
                           </div>
                           {res.status === 'valid' && (
                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                              希望: ◎ {wantCount}枠 / ◯ {availCount}枠 / ✕ {unavailCount}枠
+                              希望: 希望 {wantCount}枠 / 可 {availCount}枠 / 不可 {unavailCount}枠
                             </div>
                           )}
                           {res.decoded.error && (
@@ -330,7 +330,7 @@ export const LineImportModal: React.FC<LineImportModalProps> = ({
             className="btn btn-primary"
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
           >
-            <span>⚡ 有効な {validCount} 件を一括反映する</span>
+            <span>有効な {validCount} 件を一括反映する</span>
           </button>
         </div>
       </div>

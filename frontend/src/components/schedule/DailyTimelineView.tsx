@@ -279,8 +279,8 @@ export default function DailyTimelineView({
                 paddingLeft: '0.5rem',
               }}
             >
-              <div>📈 上: 必要人数</div>
-              <div>&nbsp;&nbsp;&nbsp;&nbsp;下: 配置人数</div>
+              <div>上: 必要人数</div>
+              <div>下: 配置人数</div>
             </div>
 
             {TIMELINE_HOURS.slice(0, -1).map((h) => {
@@ -584,7 +584,7 @@ export default function DailyTimelineView({
             style={{ width: '90%', maxWidth: '400px', backgroundColor: '#ffffff' }}
           >
             <h3 style={{ margin: '0 0 1rem', fontSize: '1.1rem' }}>
-              ⚙️ {selectedStaffForEdit.staffName} の勤務時間設定 (15分単位)
+              {selectedStaffForEdit.staffName} の勤務時間設定 (15分単位)
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <div>

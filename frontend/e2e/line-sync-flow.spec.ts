@@ -13,9 +13,9 @@ test.describe('CUJ-7: LINE Submission & Manager Bulk Import Flow (0-Yen Stateles
     await staffSelect.selectOption({ index: 1 }); // 2番目のスタッフを選択
 
     // 3. いくつかの枠をタップ（希望入力）
-    const availButtons = page.locator('button:has-text("✕ 不可")');
+    const availButtons = page.locator('button:has-text("不可 不可")');
     if (await availButtons.count() > 0) {
-      await availButtons.first().click(); // ◯ 可能に切り替え
+      await availButtons.first().click(); // 可 可能に切り替え
     }
 
     // 4. 「シフト希望を提出する」を押下
@@ -40,7 +40,7 @@ test.describe('CUJ-7: LINE Submission & Manager Bulk Import Flow (0-Yen Stateles
     // 6. 店長画面 (/admin) に遷移
     await page.goto('/admin');
 
-    // 7. 「📥 LINE希望取込」ボタンを押下してモーダルを開く
+    // 7. 「LINE希望取込」ボタンを押下してモーダルを開く
     const openImportBtn = page.locator('[data-testid="btn-open-line-import"]');
     await expect(openImportBtn).toBeVisible();
     await openImportBtn.click();
@@ -50,15 +50,15 @@ test.describe('CUJ-7: LINE Submission & Manager Bulk Import Flow (0-Yen Stateles
     await expect(lineTextArea).toBeVisible();
     await lineTextArea.fill(`店長お疲れ様です！希望提出します！ ${lineCode} よろしくお願いします！`);
 
-    // 9. 「🔍 提出コードを解析する」を押下
+    // 9. 「提出コードを解析する」を押下
     const analyzeBtn = page.locator('button:has-text("提出コードを解析する")');
     await analyzeBtn.click();
 
-    // 10. 解析結果プレビューに「✓ 取込可能」バッジが表示されることを確認
-    const validBadge = page.locator('text=✓ 取込可能');
+    // 10. 解析結果プレビューに「取込可能」バッジが表示されることを確認
+    const validBadge = page.locator('text=取込可能');
     await expect(validBadge).toBeVisible();
 
-    // 11. 「⚡ 有効な 1 件を一括反映する」を押下
+    // 11. 「有効な 1 件を一括反映する」を押下
     const applyBtn = page.locator('button:has-text("一括反映する")');
     await expect(applyBtn).toBeVisible();
     await applyBtn.click();

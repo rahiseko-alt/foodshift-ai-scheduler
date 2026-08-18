@@ -20,7 +20,7 @@ function normalizeDistribution(raw: Record<number, number>): Record<number, numb
 // 1. 居酒屋（夕方〜深夜ピーク、週末は昼呑みや宴会も増加）
 export const IZAKAYA_PROFILE: BusinessTypeProfile = {
   id: 'izakaya',
-  name: '🏮 居酒屋・大衆酒場',
+  name: '居酒屋・大衆酒場',
   description: '18〜22時のディナー・アルコール主体の業態。週末は客単価・予約宴会比率が急上昇。',
   presets: {
     weekday_lunch: { customers: 20, avg_spend: 950 },
@@ -67,7 +67,7 @@ export const IZAKAYA_PROFILE: BusinessTypeProfile = {
 // 2. ラーメン店（回転率重視、昼と夜の2山ピーク）
 export const RAMEN_PROFILE: BusinessTypeProfile = {
   id: 'ramen',
-  name: '🍜 ラーメン・中華麺',
+  name: 'ラーメン・中華麺',
   description: '12時台と19時台の2大ピーク。高回転・一定単価で少人数高生産性オペレーション。',
   presets: {
     weekday_lunch: { customers: 95, avg_spend: 980 },
@@ -110,7 +110,7 @@ export const RAMEN_PROFILE: BusinessTypeProfile = {
 // 3. カフェ・ベーカリー（昼前後〜アフタヌーンティーピーク、夜は落ち着く）
 export const CAFE_PROFILE: BusinessTypeProfile = {
   id: 'cafe',
-  name: '☕ カフェ・喫茶',
+  name: 'カフェ・喫茶',
   description: '11〜16時の昼・カフェタイムが主力。平日・休日の客層変化（ビジネス⇄ファミリー/カップル）。',
   presets: {
     weekday_lunch: { customers: 80, avg_spend: 850 },
@@ -157,7 +157,7 @@ export const CAFE_PROFILE: BusinessTypeProfile = {
 // 4. ファミリーレストラン（昼・夜ともに大型需要、週末は終日高稼働）
 export const FAMILY_RESTAURANT_PROFILE: BusinessTypeProfile = {
   id: 'family_restaurant',
-  name: '🍽️ ファミリーレストラン',
+  name: 'ファミリーレストラン',
   description: 'ランチ・ディナーともに高い客席稼働。週末は家族連れでの団体利用が急増。',
   presets: {
     weekday_lunch: { customers: 110, avg_spend: 1150 },
@@ -209,7 +209,7 @@ export const BUSINESS_PROFILES: Record<BusinessType, BusinessTypeProfile> = {
   custom: {
     ...IZAKAYA_PROFILE,
     id: 'custom',
-    name: '⚙️ カスタム設定',
+    name: 'カスタム設定',
     description: '店舗独自の4値および客数分布を自由に設定します。',
   },
 };

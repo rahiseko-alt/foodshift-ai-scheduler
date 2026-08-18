@@ -99,7 +99,7 @@ export const NegotiationModal: React.FC<NegotiationModalProps> = ({
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{ fontSize: '1.25rem' }}>🚨</span>
+            <span style={{ fontSize: '1.25rem' }}></span>
             <div>
               <h2 style={{ fontSize: '1.125rem', fontWeight: 800, margin: 0, color: '#be123c' }}>
                 人手不足解消アシスタント
@@ -119,7 +119,7 @@ export const NegotiationModal: React.FC<NegotiationModalProps> = ({
               color: '#be123c',
             }}
           >
-            ✕
+            不可
           </button>
         </div>
 
@@ -140,7 +140,7 @@ export const NegotiationModal: React.FC<NegotiationModalProps> = ({
                 fontSize: '0.875rem',
               }}
             >
-              ⚠ 出勤可能な候補スタッフが見つかりませんでした。（全員が当日他シフトに入っているか、週上限・法令制約に達しています）
+              出勤可能な候補スタッフが見つかりませんでした。（全員が当日他シフトに入っているか、週上限・法令制約に達しています）
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -227,7 +227,7 @@ export const NegotiationModal: React.FC<NegotiationModalProps> = ({
                         fontWeight: 700,
                       }}
                     >
-                      <span>{isCopied ? '✓ LINE文面をコピーしました！' : '💬 お願いLINE文面をコピー'}</span>
+                      <span>{isCopied ? 'LINE文面をコピーしました！' : 'お願いLINE文面をコピー'}</span>
                     </button>
                   </div>
                 );

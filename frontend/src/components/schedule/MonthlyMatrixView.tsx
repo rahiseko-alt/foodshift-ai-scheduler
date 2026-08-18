@@ -38,7 +38,7 @@ export default function MonthlyMatrixView({
         }}
       >
         <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-main)' }}>
-          📊 月間スタッフ別シフト一覧マトリクス（{totalDays}日間）
+          月間スタッフ別シフト一覧マトリクス（{totalDays}日間）
         </div>
         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
           ※ 各セルの表記: 開始-終了 (実働h)

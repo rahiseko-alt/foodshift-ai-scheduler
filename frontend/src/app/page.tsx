@@ -64,7 +64,7 @@ export default function HomePage() {
           飲食店特化型 AIシフト自動スケジューラー
           <br />
           <span style={{ fontSize: '0.8125rem', color: 'var(--success)', fontWeight: 600 }}>
-            ✓ 労基法18歳未満深夜禁止 100%遵守 / 希望充足率最大化 / 完全ステートレス
+            労基法18歳未満深夜禁止 100%遵守 / 希望充足率最大化 / 完全ステートレス
           </span>
         </p>
 
@@ -75,7 +75,7 @@ export default function HomePage() {
             data-testid="link-admin"
             style={{ fontSize: '1rem', padding: '0.875rem 1.5rem', minHeight: '48px' }}
           >
-            🏢 店長向け: シフト作成・管理画面 (/admin)
+            店長向け: シフト作成・管理画面 (/admin)
           </Link>
           <Link
             href="/submit"
@@ -83,7 +83,7 @@ export default function HomePage() {
             data-testid="link-submit"
             style={{ fontSize: '0.9375rem', padding: '0.75rem 1.25rem', minHeight: '46px' }}
           >
-            📱 スタッフ向け: シフト希望提出 (/submit)
+            スタッフ向け: シフト希望提出 (/submit)
           </Link>
         </div>
 

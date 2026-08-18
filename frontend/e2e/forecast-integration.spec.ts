@@ -24,7 +24,7 @@ test.describe('CUJ-5: Demand Forecasting Simulator & Shift Integration Flow', ()
     await expect(izakayaBtn).toBeVisible();
     await izakayaBtn.evaluate((b) => (b as HTMLElement).click());
 
-    // 5. 反映ボタン「⚡ この予測をシフト必要人数に反映する」を押下
+    // 5. 反映ボタン「この予測をシフト必要人数に反映する」を押下
     const applyBtn = page.locator('button:has-text("この予測をシフト必要人数に反映する")').first();
     await expect(applyBtn).toBeVisible();
     await applyBtn.click();

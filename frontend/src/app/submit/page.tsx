@@ -43,7 +43,7 @@ export default function SubmitPage() {
   const days = Math.min(7, requestData.period.days); // スマホでは直近7日間を表示
   const shifts = requestData.shifts;
 
-  // タップでステータス切り替え: available (空) -> want (◎) -> unavailable (✕) -> available
+  // タップでステータス切り替え: available (空) -> want (希望) -> unavailable (不可) -> available
   const handleToggleStatus = (day_offset: number, shift_id: string) => {
     const key = `${day_offset}_${shift_id}`;
     const current = availabilities[key] || 'available';
@@ -136,7 +136,7 @@ export default function SubmitPage() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: '1.25rem', fontWeight: 700 }}>📱 シフト希望提出</h1>
+          <h1 style={{ fontSize: '1.25rem', fontWeight: 700 }}>シフト希望提出</h1>
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
             期間: {requestData.period.start_date} から {days}日間
           </p>
@@ -147,7 +147,7 @@ export default function SubmitPage() {
           className="btn btn-secondary btn-sm"
           style={{ fontSize: '0.75rem', fontWeight: 700 }}
         >
-          🏠 ホーム
+          ホーム
         </Link>
       </header>
 
@@ -194,7 +194,7 @@ export default function SubmitPage() {
               }}
             >
               <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>
-                💰 年収の壁（{(taxWall / 10000).toFixed(0)}万円）管理
+                年収の壁（{(taxWall / 10000).toFixed(0)}万円）管理
               </span>
               <span style={{ color: progressPercent > 90 ? 'var(--danger)' : 'var(--text-muted)' }}>
                 残り ¥{remainingBudget.toLocaleString()} ({progressPercent}%)
@@ -249,8 +249,8 @@ export default function SubmitPage() {
           >
             <span>枠タップで切替:</span>
             <span>
-              <strong style={{ color: 'var(--success)' }}>◎ 希望</strong> /{' '}
-              <strong style={{ color: 'var(--danger)' }}>✕ 不可</strong> / － 通常
+              <strong style={{ color: 'var(--success)' }}>希望 希望</strong> /{' '}
+              <strong style={{ color: 'var(--danger)' }}>不可 不可</strong> / － 通常
             </span>
           </div>
 
@@ -284,7 +284,7 @@ export default function SubmitPage() {
                       color: headerColor,
                     }}
                   >
-                    <span>📅 {dateInfo.dateFormatted}</span>
+                    <span>{dateInfo.dateFormatted}</span>
                     <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>
                       Day {d + 1}
                     </span>
@@ -353,11 +353,11 @@ export default function SubmitPage() {
                           </div>
                           <div style={{ fontWeight: 700 }}>
                             {isMinorLate
-                              ? '🈲 深夜禁止'
+                              ? '深夜NG 深夜禁止'
                               : status === 'want'
-                              ? '◎ 希望'
+                              ? '希望 希望'
                               : status === 'unavailable'
-                              ? '✕ 不可'
+                              ? '不可 不可'
                               : '－ 通常'}
                           </div>
                         </button>
@@ -391,7 +391,7 @@ export default function SubmitPage() {
             }}
           >
             <div style={{ textAlign: 'center', color: 'var(--success)', fontWeight: 700, fontSize: '0.95rem', marginBottom: '0.75rem' }}>
-              ✓ 希望を保存しました！
+              希望を保存しました！
             </div>
 
             {/* LINE提出コード共有カード */}
@@ -404,7 +404,7 @@ export default function SubmitPage() {
               }}
             >
               <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
-                💬 店舗LINEグループ提出用コード (店長へ共有)
+                店舗LINEグループ提出用コード (店長へ共有)
               </div>
               <div
                 style={{
@@ -462,7 +462,7 @@ export default function SubmitPage() {
                   className="btn btn-primary btn-sm"
                   style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}
                 >
-                  <span>📋 LINE提出テキストをコピー</span>
+                  <span>LINE提出テキストをコピー</span>
                 </button>
               </div>
             </div>
@@ -474,7 +474,7 @@ export default function SubmitPage() {
       {response && (
         <div className="card" style={{ marginTop: '1.25rem' }} data-testid="confirmed-shift-section">
           <h2 style={{ fontSize: '0.9375rem', fontWeight: 700, marginBottom: '0.75rem' }}>
-            📅 あなたの確定シフト ({currentStaff?.name})
+            あなたの確定シフト ({currentStaff?.name})
           </h2>
           {myConfirmedShifts.length === 0 ? (
             <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
@@ -500,7 +500,7 @@ export default function SubmitPage() {
                     }}
                   >
                     <span>
-                      📅 <strong>{dateInfo.dateFormatted}</strong> ({shiftObj?.name}{' '}
+                      <strong>{dateInfo.dateFormatted}</strong> ({shiftObj?.name}{' '}
                       {shiftObj?.start}-{shiftObj?.end})
                     </span>
                     <span
@@ -515,7 +515,7 @@ export default function SubmitPage() {
                         color: assigned?.is_want_fulfilled ? 'var(--success)' : '#854d0e',
                       }}
                     >
-                      {assigned?.is_want_fulfilled ? '◎ 希望通り' : '◯ 割当'}
+                      {assigned?.is_want_fulfilled ? '希望 希望通り' : '可 割当'}
                     </span>
                   </li>
                 );

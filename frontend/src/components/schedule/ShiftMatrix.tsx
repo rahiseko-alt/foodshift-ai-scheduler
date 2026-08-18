@@ -224,7 +224,7 @@ export const ShiftMatrix: React.FC<Props> = ({ request, response, onResponseChan
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-            <span style={{ fontSize: '1.125rem' }}>🚨</span>
+            <span style={{ fontSize: '1.125rem' }}></span>
             <strong style={{ color: '#be123c', fontSize: '0.875rem' }}>
               {response.summary.unfilled_requirements.length} 枠で人員不足が発生しています
             </strong>
@@ -258,7 +258,7 @@ export const ShiftMatrix: React.FC<Props> = ({ request, response, onResponseChan
                   }}
                 >
                   <span>
-                    🚨 {dInfo.dateFormatted} {sh?.name || u.shift_id}: {u.shortage}名不足 (代打を探す)
+                    {dInfo.dateFormatted} {sh?.name || u.shift_id}: {u.shortage}名不足 (代打を探す)
                   </span>
                 </button>
               );
@@ -336,7 +336,7 @@ export const ShiftMatrix: React.FC<Props> = ({ request, response, onResponseChan
                             margin: '1px',
                           }}
                         >
-                          ⚠ {s.name.slice(0, 2)} -{shortageInfo.shortage}
+                          {s.name.slice(0, 2)} -{shortageInfo.shortage}
                         </button>
                       ) : null;
                     })}
@@ -422,7 +422,7 @@ export const ShiftMatrix: React.FC<Props> = ({ request, response, onResponseChan
                         <div>{assigned.shiftName}</div>
                         {assigned.isWant && (
                           <div style={{ fontSize: '0.65rem', color: 'var(--success)' }}>
-                            ◎ 希望一致
+                            希望 希望一致
                           </div>
                         )}
                       </div>
@@ -443,14 +443,14 @@ export const ShiftMatrix: React.FC<Props> = ({ request, response, onResponseChan
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h2 style={{ fontSize: '1.125rem', fontWeight: 700 }}>
-                🔧 シフト枠アサイン調整 ({activeCell.slotDate})
+                シフト枠アサイン調整 ({activeCell.slotDate})
               </h2>
               <button
                 type="button"
                 onClick={() => setActiveCell(null)}
                 style={{ background: 'none', fontSize: '1.25rem', color: 'var(--text-muted)' }}
               >
-                ✕
+                不可
               </button>
             </div>
 
@@ -504,7 +504,7 @@ export const ShiftMatrix: React.FC<Props> = ({ request, response, onResponseChan
                       }}
                     >
                       <span>
-                        👤 <strong>{ast.name}</strong> ({ast.assigned_role})
+                        <strong>{ast.name}</strong> ({ast.assigned_role})
                       </span>
                       <button
                         onClick={() => handleRemoveStaffFromSlot(ast.id)}
@@ -576,7 +576,7 @@ export const ShiftMatrix: React.FC<Props> = ({ request, response, onResponseChan
                     gap: '0.4rem',
                   }}
                 >
-                  <span>🚨 代打スタッフを探す＆お願いLINE文面を作成</span>
+                  <span>代打スタッフを探す＆お願いLINE文面を作成</span>
                 </button>
               </div>
             )}

@@ -315,7 +315,7 @@ export default function ShiftsAdminPage() {
       >
         <div>
           <h1 style={{ fontSize: '1.375rem', fontWeight: 700 }}>
-            ⏰ シフト枠 ＆ 必要人数管理
+            シフト枠 ＆ 必要人数管理
           </h1>
           <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
             シフト時間帯・休憩設定・曜日別の必要人数 ＆ 必須ロール配置
@@ -327,13 +327,13 @@ export default function ShiftsAdminPage() {
             onClick={() => setActiveTab('slots')}
             className={`btn btn-sm ${activeTab === 'slots' ? 'btn-primary' : 'btn-secondary'}`}
           >
-            📋 シフト時間帯設定
+            シフト時間帯設定
           </button>
           <button
             onClick={() => setActiveTab('requirements')}
             className={`btn btn-sm ${activeTab === 'requirements' ? 'btn-primary' : 'btn-secondary'}`}
           >
-            👥 日別必要人数マトリクス
+            日別必要人数マトリクス
           </button>
         </div>
       </header>
@@ -352,7 +352,7 @@ export default function ShiftsAdminPage() {
             fontSize: '0.875rem',
           }}
         >
-          ⚠ {reqTotalCheck.warning}
+          {reqTotalCheck.warning}
         </div>
       )}
 
@@ -369,7 +369,7 @@ export default function ShiftsAdminPage() {
             fontSize: '0.8125rem',
           }}
         >
-          <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>⚠ 必須資格ロールの不足警告:</div>
+          <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>必須資格ロールの不足警告:</div>
           <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
             {roleCheck.warnings.map((warn, i) => (
               <li key={i}>{warn}</li>
@@ -391,7 +391,7 @@ export default function ShiftsAdminPage() {
             fontSize: '0.875rem',
           }}
         >
-          ✓ {toastMessage}
+          {toastMessage}
         </div>
       )}
 
@@ -502,7 +502,7 @@ export default function ShiftsAdminPage() {
             }}
           >
             <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>
-              ⚡ ワンクリック一括パターン適用:
+              ワンクリック一括パターン適用:
             </div>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               <button
@@ -671,7 +671,7 @@ export default function ShiftsAdminPage() {
                   fontSize: '0.8125rem',
                 }}
               >
-                ⚠ {slotError}
+                {slotError}
               </div>
             )}
 

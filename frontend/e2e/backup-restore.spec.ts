@@ -38,7 +38,7 @@ test.describe('CUJ-4: Store Backup, Snapshot History & Restore Flow', () => {
     expect(download.suggestedFilename()).toMatch(/^foodshift_backup_.*\.json$/);
 
     // 7. モーダルを閉じる
-    const closeBtn = page.locator('button:has-text("✕"), button:has-text("閉じる")').first();
+    const closeBtn = page.locator('button:has-text("不可"), button:has-text("閉じる")').first();
     await closeBtn.click();
     await expect(modalHeading).not.toBeVisible();
   });

@@ -66,8 +66,8 @@ test.describe('CUJ-9: 15-Minute Quarter-Hour Shift Creation, Submission & Optimi
       if (minorValue) {
         await staffSelect.selectOption(minorValue);
 
-        // 22:00以降にかかる深夜枠のボタンが disabled かつ「🈲 深夜禁止」になっていることを検証
-        const nightBtn = page.locator('button:has-text("🈲 深夜禁止")').first();
+        // 22:00以降にかかる深夜枠のボタンが disabled かつ「深夜NG 深夜禁止」になっていることを検証
+        const nightBtn = page.locator('button:has-text("深夜NG 深夜禁止")').first();
         await expect(nightBtn).toBeVisible();
         await expect(nightBtn).toBeDisabled();
       }
@@ -76,11 +76,11 @@ test.describe('CUJ-9: 15-Minute Quarter-Hour Shift Creation, Submission & Optimi
     // 通常スタッフ（佐藤 健 または最初のスタッフ）を選択して希望入力
     await staffSelect.selectOption({ index: 0 });
 
-    // 15分刻み枠のボタン（仕込みランチ15分枠）をタップして「◎ 希望」にする
+    // 15分刻み枠のボタン（仕込みランチ15分枠）をタップして「希望 希望」にする
     const slotButton = page.locator('button:has-text("仕込みランチ15分枠"), button:has-text("10:15-15:45")').first();
     await expect(slotButton).toBeVisible();
     await slotButton.click();
-    await expect(slotButton).toContainText('◎ 希望');
+    await expect(slotButton).toContainText('希望 希望');
 
     // 提出ボタンを押下
     const submitBtn = page.locator('[data-testid="btn-submit-availability"]');

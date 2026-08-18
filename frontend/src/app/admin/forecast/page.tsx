@@ -146,7 +146,7 @@ export default function ForecastAdminPage() {
     const updatedRequest = applyForecastToOptimizeRequest(requestData, forecastResult);
     setRequestData(updatedRequest);
     saveRequest(updatedRequest);
-    showToast('⚡ 需要予測結果をシフト必要人数に反映・保存しました！');
+    showToast('需要予測結果をシフト必要人数に反映・保存しました！');
   };
 
   // チャート用の最大売上（スケーリング用）
@@ -211,7 +211,7 @@ export default function ForecastAdminPage() {
       >
         <div>
           <h1 style={{ fontSize: '1.625rem', fontWeight: 800, margin: '0 0 0.5rem 0' }}>
-            📈 売上・需要予測シミュレーター
+            売上・需要予測シミュレーター
           </h1>
           <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.875rem' }}>
             階層ベイズ更新 × トップダウン時間分解 × 2層構造エンジンで、売上予測と推奨必要人数を瞬時に算出・連携します。
@@ -230,7 +230,7 @@ export default function ForecastAdminPage() {
             boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)',
           }}
         >
-          <span>⚡ この予測をシフト必要人数に反映する</span>
+          <span>この予測をシフト必要人数に反映する</span>
         </button>
       </div>
 
@@ -302,7 +302,7 @@ export default function ForecastAdminPage() {
           {/* 業態選択 */}
           <div className="card" style={{ padding: '1.25rem' }}>
             <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: '0 0 1rem 0' }}>
-              🏪 業態プロファイル
+              業態プロファイル
             </h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
@@ -336,7 +336,7 @@ export default function ForecastAdminPage() {
                         基準L/P: ¥{p.default_target_labor_productivity.toLocaleString()}
                       </div>
                     </div>
-                    {isSelected && <span style={{ color: 'var(--primary)', fontWeight: 800 }}>✓</span>}
+                    {isSelected && <span style={{ color: 'var(--primary)', fontWeight: 800 }}></span>}
                   </button>
                 );
               })}
@@ -350,14 +350,14 @@ export default function ForecastAdminPage() {
           {/* 4値初期プリセット設定 */}
           <div className="card" style={{ padding: '1.25rem' }}>
             <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: '0 0 0.75rem 0' }}>
-              📊 4値初期設定（客数・客単価）
+              4値初期設定（客数・客単価）
             </h3>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
               {/* 平日昼 */}
               <div style={{ background: 'var(--bg)', padding: '0.75rem', borderRadius: '6px' }}>
                 <div style={{ fontSize: '0.75rem', fontWeight: 700, marginBottom: '0.5rem', color: 'var(--primary)' }}>
-                  ☀️ 平日 昼
+                  平日 昼
                 </div>
                 <div style={{ marginBottom: '0.5rem' }}>
                   <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>客数 (人)</label>
@@ -384,7 +384,7 @@ export default function ForecastAdminPage() {
               {/* 平日夜 */}
               <div style={{ background: 'var(--bg)', padding: '0.75rem', borderRadius: '6px' }}>
                 <div style={{ fontSize: '0.75rem', fontWeight: 700, marginBottom: '0.5rem', color: '#6366f1' }}>
-                  🌙 平日 夜
+                  平日 夜
                 </div>
                 <div style={{ marginBottom: '0.5rem' }}>
                   <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>客数 (人)</label>
@@ -411,7 +411,7 @@ export default function ForecastAdminPage() {
               {/* 休日昼 */}
               <div style={{ background: 'var(--bg)', padding: '0.75rem', borderRadius: '6px' }}>
                 <div style={{ fontSize: '0.75rem', fontWeight: 700, marginBottom: '0.5rem', color: '#f59e0b' }}>
-                  ☀️ 休日 昼
+                  休日 昼
                 </div>
                 <div style={{ marginBottom: '0.5rem' }}>
                   <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>客数 (人)</label>
@@ -438,7 +438,7 @@ export default function ForecastAdminPage() {
               {/* 休日夜 */}
               <div style={{ background: 'var(--bg)', padding: '0.75rem', borderRadius: '6px' }}>
                 <div style={{ fontSize: '0.75rem', fontWeight: 700, marginBottom: '0.5rem', color: '#ec4899' }}>
-                  🌙 休日 夜
+                  休日 夜
                 </div>
                 <div style={{ marginBottom: '0.5rem' }}>
                   <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>客数 (人)</label>
@@ -467,7 +467,7 @@ export default function ForecastAdminPage() {
           {/* 生産性・人件費・シミュレーション調整 */}
           <div className="card" style={{ padding: '1.25rem' }}>
             <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: '0 0 1rem 0' }}>
-              ⚙️ 生産性 & シミュレーション条件
+              生産性 & シミュレーション条件
             </h3>
 
             {/* 目標人時売上高 L/P */}
@@ -545,10 +545,10 @@ export default function ForecastAdminPage() {
               </label>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.35rem' }}>
                 {[
-                  { key: 'sunny', label: '☀️ 晴天 (1.0)' },
-                  { key: 'cloudy', label: '☁️ 曇り (0.98)' },
-                  { key: 'rainy', label: '🌧️ 雨天 (0.85)' },
-                  { key: 'storm', label: '⛈️ 荒天 (0.60)' },
+                  { key: 'sunny', label: '晴天 (1.0)' },
+                  { key: 'cloudy', label: '曇り (0.98)' },
+                  { key: 'rainy', label: '雨天 (0.85)' },
+                  { key: 'storm', label: '荒天 (0.60)' },
                 ].map((w) => (
                   <button
                     key={w.key}
@@ -570,7 +570,7 @@ export default function ForecastAdminPage() {
           {/* 日別タブセレクター */}
           <div className="card" style={{ padding: '1rem' }}>
             <div style={{ fontSize: '0.8125rem', fontWeight: 700, marginBottom: '0.75rem' }}>
-              📅 日別予測一覧（クリックして時間帯詳細を表示）
+              日別予測一覧（クリックして時間帯詳細を表示）
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: `repeat(${forecastResult.daily_forecasts.length}, 1fr)`, gap: '0.5rem' }}>
@@ -631,7 +631,7 @@ export default function ForecastAdminPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                 <div>
                   <h3 style={{ fontSize: '1.125rem', fontWeight: 700, margin: 0 }}>
-                    🕒 {selectedDayForecast.date} ({selectedDayForecast.day_of_week_label}曜) 24時間需要 ＆ 必要人数グラフ
+                    {selectedDayForecast.date} ({selectedDayForecast.day_of_week_label}曜) 24時間需要 ＆ 必要人数グラフ
                   </h3>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
                     日別売上: ¥{selectedDayForecast.total_sales.toLocaleString()} ｜ 客数: {selectedDayForecast.total_customers}名 ｜ 推奨総人時: {selectedDayForecast.total_recommended_labor_hours}時間
@@ -746,7 +746,7 @@ export default function ForecastAdminPage() {
           <div className="card" style={{ padding: '1.25rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>
-                ⚡ シフト枠別 必要人数集約プレビュー ({selectedDayForecast?.date})
+                シフト枠別 必要人数集約プレビュー ({selectedDayForecast?.date})
               </h3>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                 2層構造（固定アンカー＋売上変動枠）から集約
@@ -800,14 +800,14 @@ export default function ForecastAdminPage() {
 
             <div style={{ marginTop: '1.25rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
               <Link href="/admin/shifts" className="btn btn-secondary btn-sm">
-                ⏰ シフト枠マスタを確認する
+                シフト枠マスタを確認する
               </Link>
               <button
                 onClick={handleApplyToShiftRequirements}
                 className="btn btn-primary btn-sm"
                 style={{ fontWeight: 700 }}
               >
-                ⚡ この予測を全日シフト必要人数に反映する
+                この予測を全日シフト必要人数に反映する
               </button>
             </div>
           </div>

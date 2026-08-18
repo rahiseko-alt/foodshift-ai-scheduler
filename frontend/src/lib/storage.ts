@@ -455,7 +455,7 @@ export async function importStoreBundle(
     const currentReq = loadSavedRequest(storeId);
     const currentRes = loadSavedResponse(storeId);
     if (isIndexedDBAvailable()) {
-      await saveDbSnapshot(storeId, '📦 インポート前自動バックアップ', currentReq, currentRes);
+      await saveDbSnapshot(storeId, 'インポート前自動バックアップ', currentReq, currentRes);
     }
 
     // データ書き込み

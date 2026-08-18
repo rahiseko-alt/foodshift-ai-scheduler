@@ -191,7 +191,7 @@ export default function AdminPage() {
       >
         <div>
           <h1 style={{ fontSize: '1.375rem', fontWeight: 700 }}>
-            🏢 AIシフト自動作成 ＆ 最適化
+            AIシフト自動作成・最適化
           </h1>
           <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
             期間: {requestData.period.start_date} から {requestData.period.days}日間 ({activeStaff.length}名在籍中 | {requestData.shifts.length}シフト枠)
@@ -206,7 +206,7 @@ export default function AdminPage() {
             className="btn btn-secondary"
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
           >
-            <span>📥 LINE希望取込</span>
+            <span>LINE希望取込</span>
           </button>
 
           <button
@@ -217,11 +217,11 @@ export default function AdminPage() {
             style={{ minWidth: '190px' }}
           >
             {loading ? (
-              <span data-testid="loading-spinner">⚙ AI計算中...</span>
+              <span data-testid="loading-spinner">AI計算中...</span>
             ) : reqTotalCheck.isZero ? (
-              '⚠ 必要人数0名 (実行不可)'
+              '必要人数0名 (実行不可)'
             ) : (
-              '⚡ シフトを最適化する'
+              'シフトを最適化する'
             )}
           </button>
         </div>
@@ -251,7 +251,7 @@ export default function AdminPage() {
             fontSize: '0.875rem',
           }}
         >
-          ⚠ {reqTotalCheck.warning}
+          [注意] {reqTotalCheck.warning}
         </div>
       )}
 
@@ -269,7 +269,7 @@ export default function AdminPage() {
             fontSize: '0.8125rem',
           }}
         >
-          <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>⚠ 必須資格ロールの不足警告:</div>
+          <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>[注意] 必須資格ロールの不足警告:</div>
           <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>
             {roleCheck.warnings.map((warn, i) => (
               <li key={i}>{warn}</li>
@@ -293,7 +293,7 @@ export default function AdminPage() {
             fontWeight: 600,
           }}
         >
-          ⚡ AI最適化サーバーをスリープから復帰中です... (無料枠の仕様上、初回のみ約30〜50秒かかります。そのままお待ちください)
+          AI最適化サーバーをスリープから復帰中です... (無料枠の仕様上、初回のみ約30〜50秒かかります。そのままお待ちください)
         </div>
       )}
 
@@ -315,7 +315,7 @@ export default function AdminPage() {
             fontSize: '0.875rem',
           }}
         >
-          ✓ {toastMsg}
+          {toastMsg}
         </div>
       )}
 
@@ -377,7 +377,7 @@ export default function AdminPage() {
           className={`btn btn-sm ${viewMode === 'timeline' ? 'btn-primary' : 'btn-secondary'}`}
           style={{ fontWeight: 700 }}
         >
-          📅 日別タイムライン (ガントチャート)
+          日別タイムライン (ガントチャート)
         </button>
         <button
           type="button"
@@ -386,7 +386,7 @@ export default function AdminPage() {
           className={`btn btn-sm ${viewMode === 'monthly' ? 'btn-primary' : 'btn-secondary'}`}
           style={{ fontWeight: 700 }}
         >
-          📊 月間スタッフ一覧マトリクス ({requestData.period.days}日間)
+          月間スタッフ一覧マトリクス ({requestData.period.days}日間)
         </button>
         <button
           type="button"
@@ -395,7 +395,7 @@ export default function AdminPage() {
           className={`btn btn-sm ${viewMode === 'slots' ? 'btn-primary' : 'btn-secondary'}`}
           style={{ fontWeight: 700 }}
         >
-          ⏰ 枠別マトリクス (従来ビュー)
+          枠別マトリクス (従来ビュー)
         </button>
       </div>
 

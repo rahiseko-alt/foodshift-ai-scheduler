@@ -46,7 +46,7 @@ export const OfflineBanner: React.FC = () => {
         zIndex: 9999,
       }}
     >
-      <span>📡</span>
+      <span style={{ fontWeight: 800 }}>[オフライン]</span>
       <span>
         現在オフラインです。インターネット接続が切断されているため、最適化計算やデータ送信が行えません。Wi-Fiまたはモバイル通信をご確認ください。
       </span>

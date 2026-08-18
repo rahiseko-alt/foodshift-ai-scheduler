@@ -68,7 +68,7 @@ test.describe('CUJ-11: 1-Hour Time-Slot Shift & Dual-View (Daily Timeline & Mont
     // 2. 管理画面 (/admin) にアクセス
     await page.goto('/admin');
 
-    // 🏠 ホームボタンの存在確認
+    // ホームボタンの存在確認
     const homeBtn = page.locator('[data-testid="nav-home-btn"]');
     await expect(homeBtn).toBeVisible();
 

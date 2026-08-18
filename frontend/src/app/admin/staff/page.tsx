@@ -321,7 +321,7 @@ export default function StaffAdminPage() {
       >
         <div>
           <h1 style={{ fontSize: '1.375rem', fontWeight: 700 }}>
-            👥 スタッフマスタ管理
+            スタッフマスタ管理
           </h1>
           <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
             在籍 {activeCount} 名 / 休職・退職 {inactiveCount} 名 | 労基法制約・時給・保有ロール・相性NGペアの設定
@@ -375,7 +375,7 @@ export default function StaffAdminPage() {
             fontSize: '0.875rem',
           }}
         >
-          ✓ {toastMessage}
+          {toastMessage}
         </div>
       )}
 
@@ -481,12 +481,12 @@ export default function StaffAdminPage() {
                   <td>
                     {ngNames.length > 0 && (
                       <div style={{ fontSize: '0.75rem', color: 'var(--danger)', marginBottom: '2px' }}>
-                        🚫 NG: {ngNames.join(', ')}
+                        NG: {ngNames.join(', ')}
                       </div>
                     )}
                     {prefNames.length > 0 && (
                       <div style={{ fontSize: '0.75rem', color: 'var(--success)' }}>
-                        🤝 ペア: {prefNames.join(', ')}
+                        ペア: {prefNames.join(', ')}
                       </div>
                     )}
                     {ngNames.length === 0 && prefNames.length === 0 && (
@@ -560,7 +560,7 @@ export default function StaffAdminPage() {
                   fontSize: '0.8125rem',
                 }}
               >
-                ⚠ {formError}
+                {formError}
               </div>
             )}
 
@@ -576,7 +576,7 @@ export default function StaffAdminPage() {
                   fontSize: '0.8125rem',
                 }}
               >
-                💡 {formWarning}
+                {formWarning}
               </div>
             )}
 
@@ -651,7 +651,7 @@ export default function StaffAdminPage() {
                     cursor: 'pointer',
                   }}
                 >
-                  <span>{isAdvancedOpen ? '▲ 詳細設定を閉じる' : '▼ 法令・詳細契約設定 (必要な場合のみ)'}</span>
+                  <span>{isAdvancedOpen ? ' 詳細設定を閉じる' : ' 法令・詳細契約設定 (必要な場合のみ)'}</span>
                   <span style={{ fontSize: '0.75rem' }}>
                     {isAdvancedOpen ? '非表示' : '生年月日・留学生・母性保護・ロール・NGペア等'}
                   </span>
@@ -682,7 +682,7 @@ export default function StaffAdminPage() {
                             formRoles.includes(r.id) ? 'btn-primary' : 'btn-secondary'
                           }`}
                         >
-                          {formRoles.includes(r.id) ? '✓ ' : '+ '} {r.label}
+                          {formRoles.includes(r.id) ? '' : '+ '} {r.label}
                         </button>
                       ))}
                     </div>
@@ -837,7 +837,7 @@ export default function StaffAdminPage() {
                             }`}
                             style={{ fontSize: '0.75rem' }}
                           >
-                            {formNgStaffIds.includes(other.id) ? '🚫 NG: ' : '+ '} {other.name.split(' ')[0]}
+                            {formNgStaffIds.includes(other.id) ? 'NG: ' : '+ '} {other.name.split(' ')[0]}
                           </button>
                         ))}
                     </div>
@@ -859,7 +859,7 @@ export default function StaffAdminPage() {
                             }`}
                             style={{ fontSize: '0.75rem' }}
                           >
-                            {formPreferredPartnerIds.includes(other.id) ? '🤝 ペア: ' : '+ '} {other.name.split(' ')[0]}
+                            {formPreferredPartnerIds.includes(other.id) ? 'ペア: ' : '+ '} {other.name.split(' ')[0]}
                           </button>
                         ))}
                     </div>

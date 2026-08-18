@@ -32,7 +32,7 @@ export const RoiSummaryCard: React.FC<Props> = ({ summary, solveTimeMs }) => {
             gap: '0.5rem',
           }}
         >
-          <span style={{ fontSize: '1.125rem' }}>⚠</span>
+          <span style={{ fontSize: '1.125rem' }}></span>
           <span>
             人員不足が {summary.unfilled_requirements.length} 箇所のシフトで発生しています（不足枠は薄赤色でハイライトされています）
           </span>

@@ -9,10 +9,10 @@ export const AdminNavbar: React.FC = () => {
   const pathname = usePathname();
 
   const navItems = [
-    { label: '⚡ シフト作成・最適化', href: '/admin' },
-    { label: '👥 スタッフマスタ管理', href: '/admin/staff' },
-    { label: '⏰ シフト枠・必要人数設定', href: '/admin/shifts' },
-    { label: '📖 機能解説・ルール仕様', href: '/admin/guide' },
+    { label: 'シフト作成・最適化', href: '/admin' },
+    { label: 'スタッフマスタ管理', href: '/admin/staff' },
+    { label: 'シフト枠・必要人数設定', href: '/admin/shifts' },
+    { label: '機能解説・ルール仕様', href: '/admin/guide' },
   ];
 
   return (
@@ -68,7 +68,7 @@ export const AdminNavbar: React.FC = () => {
             data-testid="nav-home-btn"
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 700 }}
           >
-            <span>🏠 ホーム</span>
+            <span>ホーム</span>
           </Link>
           <Link
             href="/submit"
@@ -76,7 +76,7 @@ export const AdminNavbar: React.FC = () => {
             data-testid="nav-link-submit"
             style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
           >
-            <span>📱 希望入力 (/submit)</span>
+            <span>スタッフ希望入力 (/submit)</span>
           </Link>
         </div>
       </div>

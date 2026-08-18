@@ -103,7 +103,7 @@ export function findShortageCandidates(options: FindCandidatesOptions): Candidat
       (a) => a.staff_id === staff.id && a.day_offset === day_offset && a.shift_id === shift.id
     );
 
-    // Hard除外3: 明示的な「✕ 不可（unavailable）」申請
+    // Hard除外3: 明示的な「不可 不可（unavailable）」申請
     if (avail && avail.status === 'unavailable') continue;
 
     const reasons: string[] = [];
@@ -114,11 +114,11 @@ export function findShortageCandidates(options: FindCandidatesOptions): Candidat
     if (avail?.status === 'want') {
       aScore = 1.5;
       availStatus = 'want';
-      reasons.push('◎ 強く希望を出しています');
+      reasons.push('希望 強く希望を出しています');
     } else if (avail?.status === 'available') {
       aScore = 1.0;
       availStatus = 'available';
-      reasons.push('◯ 出勤可能で提出しています');
+      reasons.push('可 出勤可能で提出しています');
     } else {
       reasons.push('・希望未入力（調整枠）');
     }
@@ -133,7 +133,7 @@ export function findShortageCandidates(options: FindCandidatesOptions): Candidat
     let cScore = capacityRatio;
     if (currentHours + shift.hours > maxHours) {
       cScore = 0.1;
-      reasons.push(`⚠ 週上限まで残り${remainingHours.toFixed(1)}h`);
+      reasons.push(`週上限まで残り${remainingHours.toFixed(1)}h`);
     } else {
       reasons.push(`週残余力: ${remainingHours.toFixed(1)}h / 上限${maxHours}h`);
     }
@@ -144,7 +144,7 @@ export function findShortageCandidates(options: FindCandidatesOptions): Candidat
       const hasRequired = requiredRoleList.some((r) => staff.roles.includes(r));
       if (hasRequired) {
         rScore = 1.0;
-        reasons.push(`✓ 必須ロール (${requiredRoleList.join(', ')}) を保有`);
+        reasons.push(`必須ロール (${requiredRoleList.join(', ')}) を保有`);
       } else {
         rScore = 0.1;
       }
@@ -162,8 +162,7 @@ export function findShortageCandidates(options: FindCandidatesOptions): Candidat
 
     // お願いLINE文面作成
     const lineMessage = `${staff.name}さん、お疲れ様です！
-${dateFormatted}の【${shift.name}】(${shift.start}〜${shift.end})が現在人手不足で困っていまして、出勤をお願いできないでしょうか？🙏
-もし可能でしたらご連絡いただけますと大変助かります！よろしくお願いいたします。
+${dateFormatted}の【${shift.name}】(${shift.start}〜${shift.end})が現在人手不足で困っていまして、出勤をお願いできないでしょうか？もし可能でしたらご連絡いただけますと大変助かります！よろしくお願いいたします。
 
 ━━━━━━━━━━━━━━
 FoodShift AI シフト管理
