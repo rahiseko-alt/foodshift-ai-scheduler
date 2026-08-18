@@ -114,9 +114,22 @@ export default function AdminPage() {
   const handleUpdateShiftTime = (staffId: string, dayOffset: number, startTime: string, endTime: string) => {
     if (!response || !response.assigned_shifts) return;
 
-    const startH = parseInt(startTime.split(':')[0], 10);
-    const endH = parseInt(endTime.split(':')[0], 10);
-    const hours = Math.max(0, endH - startH);
+    const [sH, sM] = startTime.split(':').map(Number);
+    const [eH, eM] = endTime.split(':').map(Number);
+    const startMin = (sH || 0) * 60 + (sM || 0);
+    const endMin = (eH || 0) * 60 + (eM || 0);
+    const grossMinutes = Math.max(0, endMin - startMin);
+    const grossHours = grossMinutes / 60.0;
+
+    // 労基法第34条に基づく休憩時間
+    let breakMin = 0;
+    if (grossHours > 8.0) {
+      breakMin = 60;
+    } else if (grossHours > 6.0) {
+      breakMin = 45;
+    }
+
+    const netHours = Math.max(0, (grossMinutes - breakMin) / 60.0);
 
     const existingIdx = response.assigned_shifts.findIndex(
       (s) => s.staff_id === staffId && s.day_offset === dayOffset
@@ -125,14 +138,18 @@ export default function AdminPage() {
     const updatedAssigned = [...response.assigned_shifts];
     const staff = requestData.staff_members.find((st) => st.id === staffId);
     const wage = staff ? staff.hourly_wage : 1000;
+    const isLateNight = endMin > 22 * 60;
+    const laborCost = Math.floor(netHours * wage + 0.5);
 
     if (existingIdx >= 0) {
       updatedAssigned[existingIdx] = {
         ...updatedAssigned[existingIdx],
         start_time: startTime,
         end_time: endTime,
-        hours,
-        labor_cost: hours * wage,
+        hours: netHours,
+        break_minutes: breakMin,
+        labor_cost: laborCost,
+        is_late_night: isLateNight,
       };
     } else if (staff) {
       updatedAssigned.push({
@@ -142,11 +159,11 @@ export default function AdminPage() {
         date: '',
         start_time: startTime,
         end_time: endTime,
-        hours,
-        break_minutes: 0,
+        hours: netHours,
+        break_minutes: breakMin,
         hourly_wage: wage,
-        labor_cost: hours * wage,
-        is_late_night: endH > 22,
+        labor_cost: laborCost,
+        is_late_night: isLateNight,
       });
     }
 
@@ -155,7 +172,7 @@ export default function AdminPage() {
       assigned_shifts: updatedAssigned,
     };
     handleResponseChange(updatedRes);
-    showToast(`${staff?.name || ''} の勤務時間を更新しました`);
+    showToast(`${staff?.name || ''} の勤務時間を更新しました (${startTime}〜${endTime} / ${netHours}h)`);
   };
 
   return (

@@ -1,4 +1,5 @@
 'use client';
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   AssignedShiftTime,
@@ -20,8 +21,28 @@ interface DailyTimelineViewProps {
   onUpdateShiftTime?: (staffId: string, dayOffset: number, startTime: string, endTime: string) => void;
 }
 
-// 営業時間スロット (09:00 〜 24:00 = 15スロット)
-const TIMELINE_HOURS = Array.from({ length: 16 }, (_, i) => i + 9); // 9..24
+// 営業時間 (09:00 〜 24:00 = 15時間 = 900分)
+const TIMELINE_START_HOUR = 9;
+const TIMELINE_END_HOUR = 24;
+const TIMELINE_HOURS = Array.from(
+  { length: TIMELINE_END_HOUR - TIMELINE_START_HOUR + 1 },
+  (_, i) => i + TIMELINE_START_HOUR
+); // [9, 10, ..., 24]
+const TOTAL_MINUTES = (TIMELINE_END_HOUR - TIMELINE_START_HOUR) * 60; // 900分
+
+// 分数ヘルパー関数
+function timeToMinutes(t: string): number {
+  if (!t) return 9 * 60;
+  const [h, m] = t.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+function minutesToTimeString(min: number): string {
+  const clamped = Math.max(TIMELINE_START_HOUR * 60, Math.min(TIMELINE_END_HOUR * 60, min));
+  const h = Math.floor(clamped / 60);
+  const m = clamped % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
 
 export default function DailyTimelineView({
   currentDayOffset,
@@ -41,12 +62,12 @@ export default function DailyTimelineView({
     end: string;
   } | null>(null);
 
-  // マウスドラッグ伸縮の状態管理
+  // マウスドラッグ伸縮の状態管理 (15分単位)
   const [resizing, setResizing] = useState<{
     staffId: string;
     edge: 'start' | 'end';
-    initialStart: number;
-    initialEnd: number;
+    initialStartMin: number;
+    initialEndMin: number;
   } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -73,41 +94,48 @@ export default function DailyTimelineView({
   TIMELINE_HOURS.forEach((h) => {
     // h時に勤務している人数
     const count = dayShifts.filter((s) => {
-      const startH = parseInt(s.start_time.split(':')[0], 10);
-      const endH = parseInt(s.end_time.split(':')[0], 10);
-      return h >= startH && h < endH;
+      const sMin = timeToMinutes(s.start_time);
+      const eMin = timeToMinutes(s.end_time);
+      const slotStart = h * 60;
+      const slotEnd = (h + 1) * 60;
+      return sMin < slotEnd && eMin > slotStart;
     }).length;
     actualMap.set(h, count);
   });
 
-  // ドラッグ操作による時間伸縮イベントリスナー
+  // 15分刻みスナップによるドラッグ伸縮
   useEffect(() => {
     if (!resizing) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      // マウス位置から最も近い時間スロットを計算
       const rowElem = document.querySelector(`[data-testid="timeline-slots-${resizing.staffId}"]`);
       if (!rowElem) return;
 
       const rect = rowElem.getBoundingClientRect();
-      const relativeX = e.clientX - rect.left;
-      const slotWidth = rect.width / TIMELINE_HOURS.length;
-      let targetHour = TIMELINE_HOURS[0] + Math.floor(relativeX / slotWidth);
-      targetHour = Math.max(9, Math.min(24, targetHour));
+      const relativeX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+      const ratio = relativeX / rect.width;
+
+      // 15分（0.25h）単位でスナップ
+      const rawMinutes = TIMELINE_START_HOUR * 60 + ratio * TOTAL_MINUTES;
+      const snappedMinutes = Math.round(rawMinutes / 15) * 15;
+      const clampedMinutes = Math.max(
+        TIMELINE_START_HOUR * 60,
+        Math.min(TIMELINE_END_HOUR * 60, snappedMinutes)
+      );
 
       const currentShift = shiftMap.get(resizing.staffId);
       if (!currentShift) return;
 
-      let newStart = parseInt(currentShift.start_time.split(':')[0], 10);
-      let newEnd = parseInt(currentShift.end_time.split(':')[0], 10);
+      let newStartMin = timeToMinutes(currentShift.start_time);
+      let newEndMin = timeToMinutes(currentShift.end_time);
 
       if (resizing.edge === 'start') {
-        if (targetHour < newEnd) {
-          newStart = targetHour;
+        if (clampedMinutes < newEndMin) {
+          newStartMin = clampedMinutes;
         }
       } else if (resizing.edge === 'end') {
-        if (targetHour > newStart) {
-          newEnd = targetHour;
+        if (clampedMinutes > newStartMin) {
+          newEndMin = clampedMinutes;
         }
       }
 
@@ -115,8 +143,8 @@ export default function DailyTimelineView({
         onUpdateShiftTime(
           resizing.staffId,
           currentDayOffset,
-          `${String(newStart).padStart(2, '0')}:00`,
-          `${String(newEnd).padStart(2, '0')}:00`
+          minutesToTimeString(newStartMin),
+          minutesToTimeString(newEndMin)
         );
       }
     };
@@ -217,15 +245,15 @@ export default function DailyTimelineView({
               人員不足
             </span>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              ※バー両端ドラッグで伸縮
+              ※点線・伸縮は15分単位
             </span>
           </div>
         </div>
 
-        {/* ③ 必要 vs 配置（上が必要 / 下が配置）の山谷表示 ＆ ① タテ点線 */}
+        {/* ③ 必要 vs 配置（上が必要 / 下が配置）の山谷表示 ＆ ① 15分刻み点線グリッド */}
         <div
           style={{
-            minWidth: '880px',
+            minWidth: '940px',
             backgroundColor: 'var(--surface-hover)',
             padding: '0.5rem 0.75rem',
             borderRadius: 'var(--radius)',
@@ -236,7 +264,7 @@ export default function DailyTimelineView({
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: `180px repeat(${TIMELINE_HOURS.length}, minmax(42px, 1fr))`,
+              gridTemplateColumns: `180px repeat(${TIMELINE_HOURS.length - 1}, minmax(48px, 1fr))`,
               gap: '0',
               alignItems: 'center',
               textAlign: 'center',
@@ -251,11 +279,11 @@ export default function DailyTimelineView({
                 paddingLeft: '0.5rem',
               }}
             >
-              <div>📈 上: 必要</div>
-              <div>&nbsp;&nbsp;&nbsp;&nbsp;下: 配置</div>
+              <div>📈 上: 必要人数</div>
+              <div>&nbsp;&nbsp;&nbsp;&nbsp;下: 配置人数</div>
             </div>
 
-            {TIMELINE_HOURS.map((h) => {
+            {TIMELINE_HOURS.slice(0, -1).map((h) => {
               const req = reqMap.get(h) || 0;
               const actual = actualMap.get(h) || 0;
               const isShortage = actual < req;
@@ -267,12 +295,13 @@ export default function DailyTimelineView({
                   data-testid={`hourly-stat-${h}`}
                   style={{
                     padding: '0.2rem 0',
-                    borderRight: '1px dashed rgba(203, 213, 225, 0.8)', // ① タテ点線
+                    borderRight: '1px dashed rgba(148, 163, 184, 0.8)', // ① 1時間点線境界
                     backgroundColor: isShortage
                       ? 'rgba(239, 68, 68, 0.15)'
                       : isSurplus
                       ? 'rgba(16, 185, 129, 0.12)'
                       : 'transparent',
+                    position: 'relative',
                   }}
                 >
                   {/* 上: 必要 */}
@@ -299,12 +328,12 @@ export default function DailyTimelineView({
           </div>
         </div>
 
-        {/* ヘッダー時刻目盛り */}
+        {/* ヘッダー時刻目盛り ＆ 15分サブ点線 */}
         <div
           style={{
-            minWidth: '880px',
+            minWidth: '940px',
             display: 'grid',
-            gridTemplateColumns: `180px repeat(${TIMELINE_HOURS.length}, minmax(42px, 1fr))`,
+            gridTemplateColumns: `180px repeat(${TIMELINE_HOURS.length - 1}, minmax(48px, 1fr))`,
             gap: '0',
             textAlign: 'center',
             fontSize: '0.75rem',
@@ -314,11 +343,12 @@ export default function DailyTimelineView({
           }}
         >
           <div style={{ textAlign: 'left', paddingLeft: '0.5rem' }}>スタッフ氏名</div>
-          {TIMELINE_HOURS.map((h) => (
+          {TIMELINE_HOURS.slice(0, -1).map((h) => (
             <div
               key={h}
               style={{
-                borderRight: '1px dashed rgba(203, 213, 225, 0.8)', // ① タテ点線
+                borderRight: '1px dashed rgba(148, 163, 184, 0.8)',
+                position: 'relative',
               }}
             >
               {h}:00
@@ -327,13 +357,13 @@ export default function DailyTimelineView({
         </div>
       </div>
 
-      {/* 3. ガントチャート・タイムライン本体（スタッフ行一覧） */}
-      <div style={{ minWidth: '880px', padding: '0.75rem 1rem 1.5rem' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+      {/* 3. ガントチャート・タイムライン本体（スタッフ行一覧 ＆ 15分グリッド線） */}
+      <div style={{ minWidth: '940px', padding: '0.75rem 1rem 1.5rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
           {staffMembers.map((staff) => {
             const shift = shiftMap.get(staff.id);
-            const startH = shift ? parseInt(shift.start_time.split(':')[0], 10) : null;
-            const endH = shift ? parseInt(shift.end_time.split(':')[0], 10) : null;
+            const startMin = shift ? timeToMinutes(shift.start_time) : null;
+            const endMin = shift ? timeToMinutes(shift.end_time) : null;
 
             return (
               <div
@@ -341,12 +371,12 @@ export default function DailyTimelineView({
                 data-testid={`timeline-row-${staff.id}`}
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: `180px repeat(${TIMELINE_HOURS.length}, minmax(42px, 1fr))`,
+                  gridTemplateColumns: `180px repeat(${TIMELINE_HOURS.length - 1}, minmax(48px, 1fr))`,
                   gap: '0',
                   alignItems: 'center',
                   padding: '0.35rem 0',
                   borderRadius: '6px',
-                  backgroundColor: shift ? 'transparent' : 'rgba(241, 245, 249, 0.4)',
+                  backgroundColor: shift ? 'transparent' : 'rgba(241, 245, 249, 0.35)',
                   position: 'relative',
                 }}
               >
@@ -369,52 +399,72 @@ export default function DailyTimelineView({
                   </div>
                 </div>
 
-                {/* タイムライン時間スロットセル群 ＆ ① タテ点線 ＆ ② 両端リサイズハンドル */}
+                {/* ① 15分刻み縦点線グリッド ＆ ② 15分ドラッグ伸縮バー */}
                 <div
                   data-testid={`timeline-slots-${staff.id}`}
                   style={{
-                    gridColumn: `2 / span ${TIMELINE_HOURS.length}`,
+                    gridColumn: `2 / span ${TIMELINE_HOURS.length - 1}`,
                     display: 'grid',
-                    gridTemplateColumns: `repeat(${TIMELINE_HOURS.length}, minmax(42px, 1fr))`,
+                    gridTemplateColumns: `repeat(${TIMELINE_HOURS.length - 1}, minmax(48px, 1fr))`,
                     gap: '0',
                     height: '36px',
                     position: 'relative',
                   }}
                 >
-                  {/* 背景グリッドと①タテ点線 */}
-                  {TIMELINE_HOURS.map((h) => (
+                  {/* 各時間の 4分割 15分グリッド線 */}
+                  {TIMELINE_HOURS.slice(0, -1).map((h) => (
                     <div
                       key={h}
-                      onClick={() => {
-                        if (!shift) {
-                          setSelectedStaffForEdit({
-                            staffId: staff.id,
-                            staffName: staff.name,
-                            start: `${String(h).padStart(2, '0')}:00`,
-                            end: `${String(Math.min(24, h + 4)).padStart(2, '0')}:00`,
-                          });
-                        }
-                      }}
                       style={{
-                        borderRight: '1px dashed rgba(203, 213, 225, 0.6)', // ① タテ薄い点線
-                        backgroundColor: 'rgba(241, 245, 249, 0.3)',
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(4, 1fr)',
                         height: '100%',
-                        cursor: shift ? 'default' : 'pointer',
+                        borderRight: '1px dashed rgba(148, 163, 184, 0.7)', // 1時間境界線
                       }}
-                      title={!shift ? `${staff.name} を ${h}:00 からアサイン` : undefined}
-                    />
+                    >
+                      {[0, 15, 30, 45].map((m) => (
+                        <div
+                          key={m}
+                          data-testid={`subslot-${h}-${m}`}
+                          onClick={() => {
+                            if (!shift) {
+                              const sTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                              const eTime = `${String(Math.min(24, h + 4)).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                              setSelectedStaffForEdit({
+                                staffId: staff.id,
+                                staffName: staff.name,
+                                start: sTime,
+                                end: eTime,
+                              });
+                            }
+                          }}
+                          style={{
+                            borderRight:
+                              m === 30
+                                ? '1px dashed rgba(203, 213, 225, 0.6)' // 30分点線
+                                : m < 45
+                                ? '1px dotted rgba(226, 232, 240, 0.5)' // 15分/45分点線
+                                : 'none',
+                            backgroundColor: 'rgba(248, 250, 252, 0.4)',
+                            height: '100%',
+                            cursor: shift ? 'default' : 'pointer',
+                          }}
+                          title={!shift ? `${staff.name} を ${h}:${String(m).padStart(2, '0')} からアサイン` : undefined}
+                        />
+                      ))}
+                    </div>
                   ))}
 
-                  {/* ② 出勤横バー ＆ 両端リサイズハンドル */}
-                  {shift && startH !== null && endH !== null && startH < endH && (
+                  {/* ② 出勤横バー ＆ 15分リサイズハンドル */}
+                  {shift && startMin !== null && endMin !== null && startMin < endMin && (
                     <div
                       data-testid={`shift-bar-${staff.id}`}
                       style={{
                         position: 'absolute',
                         top: '2px',
                         bottom: '2px',
-                        left: `${((Math.max(9, startH) - 9) / TIMELINE_HOURS.length) * 100}%`,
-                        width: `${((Math.min(24, endH) - Math.max(9, startH)) / TIMELINE_HOURS.length) * 100}%`,
+                        left: `${((Math.max(TIMELINE_START_HOUR * 60, startMin) - TIMELINE_START_HOUR * 60) / TOTAL_MINUTES) * 100}%`,
+                        width: `${((Math.min(TIMELINE_END_HOUR * 60, endMin) - Math.max(TIMELINE_START_HOUR * 60, startMin)) / TOTAL_MINUTES) * 100}%`,
                         backgroundColor: shift.is_late_night ? '#7c3aed' : 'var(--primary)',
                         borderRadius: '6px',
                         display: 'flex',
@@ -426,7 +476,7 @@ export default function DailyTimelineView({
                         zIndex: 5,
                       }}
                     >
-                      {/* ② 左端リサイズハンドル */}
+                      {/* ② 左端リサイズハンドル (15分単位) */}
                       <div
                         data-testid={`resize-start-${staff.id}`}
                         onMouseDown={(e) => {
@@ -434,27 +484,27 @@ export default function DailyTimelineView({
                           setResizing({
                             staffId: staff.id,
                             edge: 'start',
-                            initialStart: startH,
-                            initialEnd: endH,
+                            initialStartMin: startMin,
+                            initialEndMin: endMin,
                           });
                         }}
                         style={{
-                          width: '10px',
+                          width: '12px',
                           height: '100%',
                           cursor: 'ew-resize',
-                          backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                          backgroundColor: 'rgba(255, 255, 255, 0.35)',
                           borderTopLeftRadius: '6px',
                           borderBottomLeftRadius: '6px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                         }}
-                        title="左端をドラッグして開始時間を変更"
+                        title="左端をドラッグして開始時間を15分刻みで変更"
                       >
-                        <span style={{ fontSize: '0.6rem', opacity: 0.8 }}>◀</span>
+                        <span style={{ fontSize: '0.6rem', opacity: 0.85 }}>◀</span>
                       </div>
 
-                      {/* 中央テキスト & クリックで詳細編集 */}
+                      {/* 中央テキスト & クリックで直接編集 */}
                       <div
                         onClick={() => {
                           setSelectedStaffForEdit({
@@ -480,7 +530,7 @@ export default function DailyTimelineView({
                         {shift.start_time}-{shift.end_time} ({shift.hours}h)
                       </div>
 
-                      {/* ② 右端リサイズハンドル */}
+                      {/* ② 右端リサイズハンドル (15分単位) */}
                       <div
                         data-testid={`resize-end-${staff.id}`}
                         onMouseDown={(e) => {
@@ -488,24 +538,24 @@ export default function DailyTimelineView({
                           setResizing({
                             staffId: staff.id,
                             edge: 'end',
-                            initialStart: startH,
-                            initialEnd: endH,
+                            initialStartMin: startMin,
+                            initialEndMin: endMin,
                           });
                         }}
                         style={{
-                          width: '10px',
+                          width: '12px',
                           height: '100%',
                           cursor: 'ew-resize',
-                          backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                          backgroundColor: 'rgba(255, 255, 255, 0.35)',
                           borderTopRightRadius: '6px',
                           borderBottomRightRadius: '6px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                         }}
-                        title="右端をドラッグして終了時間を変更"
+                        title="右端をドラッグして終了時間を15分刻みで変更"
                       >
-                        <span style={{ fontSize: '0.6rem', opacity: 0.8 }}>▶</span>
+                        <span style={{ fontSize: '0.6rem', opacity: 0.85 }}>▶</span>
                       </div>
                     </div>
                   )}
@@ -516,7 +566,7 @@ export default function DailyTimelineView({
         </div>
       </div>
 
-      {/* 4. 手動微調整モーダル */}
+      {/* 4. 手動微調整モーダル (15分刻み step=900) */}
       {selectedStaffForEdit && (
         <div
           style={{
@@ -534,14 +584,14 @@ export default function DailyTimelineView({
             style={{ width: '90%', maxWidth: '400px', backgroundColor: '#ffffff' }}
           >
             <h3 style={{ margin: '0 0 1rem', fontSize: '1.1rem' }}>
-              ⚙️ {selectedStaffForEdit.staffName} の勤務時間設定
+              ⚙️ {selectedStaffForEdit.staffName} の勤務時間設定 (15分単位)
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <div>
-                <label className="label">出勤時刻</label>
+                <label className="label">出勤時刻 (15分刻み)</label>
                 <input
                   type="time"
-                  step="3600"
+                  step="900"
                   className="input"
                   value={selectedStaffForEdit.start}
                   onChange={(e) =>
@@ -553,10 +603,10 @@ export default function DailyTimelineView({
                 />
               </div>
               <div>
-                <label className="label">退勤時刻</label>
+                <label className="label">退勤時刻 (15分刻み)</label>
                 <input
                   type="time"
-                  step="3600"
+                  step="900"
                   className="input"
                   value={selectedStaffForEdit.end}
                   onChange={(e) =>

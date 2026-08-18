@@ -1,10 +1,10 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('CUJ-11: 1-Hour Time-Slot Shift & Dual-View (Daily Timeline & Monthly Matrix)', () => {
-  test('should optimize with hourly time-slots, render vertical grid, top-required/bottom-actual split, resize handles and Home button', async ({
+  test('should optimize with hourly time-slots, render 15-minute dotted grid, top-required/bottom-actual split, 15-min resize handles and Home button', async ({
     page,
   }) => {
-    // 1. API モックレスポンスを設定
+    // 1. API モックレスポンスを設定 (15分刻みシフト)
     await page.route('**/api/v1/optimize', async (route) => {
       await route.fulfill({
         status: 200,
@@ -29,12 +29,12 @@ test.describe('CUJ-11: 1-Hour Time-Slot Shift & Dual-View (Daily Timeline & Mont
               name: '佐藤 店長 (社員)',
               day_offset: 0,
               date: '2026-09-01',
-              start_time: '11:00',
-              end_time: '15:00',
-              hours: 4.0,
+              start_time: '10:15',
+              end_time: '15:45',
+              hours: 5.5,
               break_minutes: 0,
               hourly_wage: 1500,
-              labor_cost: 6000,
+              labor_cost: 8250,
               is_late_night: false,
             },
             {
@@ -43,11 +43,11 @@ test.describe('CUJ-11: 1-Hour Time-Slot Shift & Dual-View (Daily Timeline & Mont
               day_offset: 0,
               date: '2026-09-01',
               start_time: '10:00',
-              end_time: '14:00',
-              hours: 4.0,
+              end_time: '14:30',
+              hours: 4.5,
               break_minutes: 0,
               hourly_wage: 1400,
-              labor_cost: 5600,
+              labor_cost: 6300,
               is_late_night: false,
             },
           ],
@@ -89,7 +89,19 @@ test.describe('CUJ-11: 1-Hour Time-Slot Shift & Dual-View (Daily Timeline & Mont
     await expect(stat12).toContainText('要');
     await expect(stat12).toContainText('配');
 
-    // ② リサイズハンドル（左端・右端）の存在検証
+    // ① 15分刻み点線サブスロット（10:15, 10:30, 10:45）の存在確認
+    const subslot15 = page.locator('[data-testid="subslot-10-15"]').first();
+    const subslot30 = page.locator('[data-testid="subslot-10-30"]').first();
+    const subslot45 = page.locator('[data-testid="subslot-10-45"]').first();
+    await expect(subslot15).toBeVisible();
+    await expect(subslot30).toBeVisible();
+    await expect(subslot45).toBeVisible();
+
+    // ② 15分刻み出勤バー（10:15-15:45）およびリサイズハンドルの存在検証
+    const shiftBar = page.locator('[data-testid="shift-bar-emp_01"]');
+    await expect(shiftBar).toBeVisible();
+    await expect(shiftBar).toContainText('10:15-15:45');
+
     const resizeStart = page.locator('[data-testid="resize-start-emp_01"]');
     const resizeEnd = page.locator('[data-testid="resize-end-emp_01"]');
     await expect(resizeStart).toBeVisible();
