@@ -102,6 +102,11 @@ test.describe('CUJ-11: 1-Hour Time-Slot Shift & Dual-View (Daily Timeline & Mont
     await expect(shiftBar).toBeVisible();
     await expect(shiftBar).toContainText('10:15-15:45');
 
+    // ★ 希望シフト下敷きバー（薄い青色）の存在検証
+    const prefShiftBar = page.locator('[data-testid="pref-shift-bar-emp_01"]');
+    await expect(prefShiftBar).toBeVisible();
+    await expect(prefShiftBar).toContainText('希望:');
+
     const resizeStart = page.locator('[data-testid="resize-start-emp_01"]');
     const resizeEnd = page.locator('[data-testid="resize-end-emp_01"]');
     await expect(resizeStart).toBeVisible();

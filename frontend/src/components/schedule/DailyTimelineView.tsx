@@ -5,6 +5,7 @@ import {
   AssignedShiftTime,
   HourlyRequirement,
   HourlyScheduleSlot,
+  StaffHourlyAvailability,
   StaffMember,
 } from '../../lib/types';
 import { formatDisplayDate } from '../../lib/date-utils';
@@ -18,6 +19,7 @@ interface DailyTimelineViewProps {
   assignedShifts: AssignedShiftTime[];
   hourlyRequirements: HourlyRequirement[];
   hourlySchedule: HourlyScheduleSlot[];
+  hourlyAvailabilities?: StaffHourlyAvailability[];
   onUpdateShiftTime?: (staffId: string, dayOffset: number, startTime: string, endTime: string) => void;
 }
 
@@ -53,6 +55,7 @@ export default function DailyTimelineView({
   assignedShifts,
   hourlyRequirements,
   hourlySchedule,
+  hourlyAvailabilities = [],
   onUpdateShiftTime,
 }: DailyTimelineViewProps) {
   const [selectedStaffForEdit, setSelectedStaffForEdit] = useState<{
@@ -221,7 +224,19 @@ export default function DailyTimelineView({
             </button>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.85rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.85rem', flexWrap: 'wrap' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+              <span
+                style={{
+                  width: '12px',
+                  height: '12px',
+                  backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                  border: '1px dashed rgba(59, 130, 246, 0.6)',
+                  borderRadius: '3px',
+                }}
+              />
+              希望シフト (下敷き)
+            </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
               <span
                 style={{
@@ -231,7 +246,7 @@ export default function DailyTimelineView({
                   borderRadius: '3px',
                 }}
               />
-              出勤中
+              確定シフト
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
               <span
@@ -365,6 +380,22 @@ export default function DailyTimelineView({
             const startMin = shift ? timeToMinutes(shift.start_time) : null;
             const endMin = shift ? timeToMinutes(shift.end_time) : null;
 
+            // スタッフの希望時間帯 (下敷き用)
+            const hourlyAvail = hourlyAvailabilities.find(
+              (a) => a.staff_id === staff.id && a.day_offset === currentDayOffset
+            );
+            const isAvail = hourlyAvail ? hourlyAvail.is_available : true;
+            const prefStartMin = isAvail
+              ? (hourlyAvail?.available_from !== undefined ? hourlyAvail.available_from : 10) * 60
+              : null;
+            const prefEndMin = isAvail
+              ? (hourlyAvail?.available_to !== undefined
+                  ? hourlyAvail.available_to
+                  : staff.is_minor
+                  ? 22
+                  : 24) * 60
+              : null;
+
             return (
               <div
                 key={staff.id}
@@ -399,7 +430,7 @@ export default function DailyTimelineView({
                   </div>
                 </div>
 
-                {/* ① 15分刻み縦点線グリッド ＆ ② 15分ドラッグ伸縮バー */}
+                {/* ① 15分刻み縦点線グリッド ＆ ② 15分ドラッグ伸縮バー ＆ 希望シフト下敷き */}
                 <div
                   data-testid={`timeline-slots-${staff.id}`}
                   style={{
@@ -454,6 +485,34 @@ export default function DailyTimelineView({
                       ))}
                     </div>
                   ))}
+
+                  {/* ★ 希望シフト下敷きバー (薄い青色・破線枠) */}
+                  {prefStartMin !== null && prefEndMin !== null && prefStartMin < prefEndMin && (
+                    <div
+                      data-testid={`pref-shift-bar-${staff.id}`}
+                      style={{
+                        position: 'absolute',
+                        top: '3px',
+                        bottom: '3px',
+                        left: `${((Math.max(TIMELINE_START_HOUR * 60, prefStartMin) - TIMELINE_START_HOUR * 60) / TOTAL_MINUTES) * 100}%`,
+                        width: `${((Math.min(TIMELINE_END_HOUR * 60, prefEndMin) - Math.max(TIMELINE_START_HOUR * 60, prefStartMin)) / TOTAL_MINUTES) * 100}%`,
+                        backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                        border: '1px dashed rgba(59, 130, 246, 0.45)',
+                        borderRadius: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'flex-start',
+                        paddingLeft: '6px',
+                        fontSize: '0.65rem',
+                        color: '#2563eb',
+                        fontWeight: 600,
+                        pointerEvents: 'none',
+                        zIndex: 2,
+                      }}
+                    >
+                      希望: {minutesToTimeString(prefStartMin)}-{minutesToTimeString(prefEndMin)}
+                    </div>
+                  )}
 
                   {/* ② 出勤横バー ＆ 15分リサイズハンドル */}
                   {shift && startMin !== null && endMin !== null && startMin < endMin && (

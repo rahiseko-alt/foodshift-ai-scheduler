@@ -410,6 +410,7 @@ export default function AdminPage() {
           assignedShifts={response?.assigned_shifts || []}
           hourlyRequirements={requestData.hourly_requirements || []}
           hourlySchedule={response?.hourly_schedule || []}
+          hourlyAvailabilities={requestData.hourly_availabilities || []}
           onUpdateShiftTime={handleUpdateShiftTime}
         />
       )}
