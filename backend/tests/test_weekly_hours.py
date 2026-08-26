@@ -319,3 +319,37 @@ def test_hourly_solver_performance_15_staff_14_days() -> None:
     assert elapsed < 5.0, f"15人×14日の求解に {elapsed:.2f} 秒かかった"
     assert res.status != "INFEASIBLE"
     assert res.assigned_shifts, "解が空（性能テストが空振りしている）"
+
+
+def test_unknown_status_is_not_reported_as_constraint_conflict() -> None:
+    """制限時間切れ(UNKNOWN)を制約矛盾(INFEASIBLE)と同じ文言で返さない。
+
+    CP-SAT の UNKNOWN は「制限時間内に解を発見できなかった」であり、
+    制約が矛盾しているとは限らない。同じ文言で返すと、実際には規模の
+    問題なのに店長が設定を疑って延々と直すことになる。
+
+    UNKNOWN をタイミング依存で再現するのはフレーキーなため、
+    分岐関数を直接検証する。
+    """
+    from ortools.sat.python import cp_model
+
+    from app.engine.constraints import describe_no_solution
+
+    staff = StaffMemberSchema(id="p1", name="パート", roles=["hall"], hourly_wage=1000)
+    shift = ShiftSchema(
+        id="day", name="日勤", start="10:00", end="18:00", hours=8.0, break_minutes=45
+    )
+    request = ShiftOptimizeRequest(
+        period=PeriodSchema(start_date="2026-09-01", days=1),
+        staff_members=[staff],
+        shifts=[shift],
+        requirements=[ShiftRequirementSchema(day_offset=0, shift_id="day", min_staff=1)],
+    )
+
+    timeout_msg = " ".join(describe_no_solution(request, cp_model.UNKNOWN))
+    conflict_msg = " ".join(describe_no_solution(request, cp_model.INFEASIBLE))
+
+    assert timeout_msg != conflict_msg, "UNKNOWN と INFEASIBLE が同じ文言になっている"
+    assert "制限時間" in timeout_msg
+    assert "矛盾しているとは限りません" in timeout_msg
+    assert "制約の競合" in conflict_msg
