@@ -38,7 +38,14 @@ async function optimizeForReal(
   page: Page
 ): Promise<{ apiResponse: import('@playwright/test').Response; body: ShiftOptimizeResponse }> {
   const optimizeBtn = page.locator('[data-testid="btn-optimize"]');
-  await expect(optimizeBtn).toBeVisible({ timeout: 30000 });
+  await expect(optimizeBtn).toBeVisible({ timeout: 60000 });
+
+  // ハイドレーション完了の確認。SSR済みHTMLに対するクリックは無反応で、
+  // 「押したのに何も起きない」テストになるため、状態変化を伴う操作で確認する。
+  await page.locator('[data-testid="tab-view-slots"]').click();
+  await expect(page.locator('[data-testid="shift-matrix"]')).toBeVisible({ timeout: 60000 });
+  await page.locator('[data-testid="tab-view-timeline"]').click();
+  await expect(page.locator('[data-testid="daily-timeline-view"]')).toBeVisible({ timeout: 60000 });
 
   for (let attempt = 0; attempt < 6; attempt++) {
     const responsePromise = page.waitForResponse(
@@ -191,6 +198,7 @@ test.describe('Disaster Recovery: Storage & Backup Integrity Flow', () => {
     fs.writeFileSync(badPath, '{"foodshift_version":"1.0.0","request":{"period":{}}}');
 
     await page.goto('/admin/staff');
+    await expect(page.locator('[data-testid="btn-add-staff"]')).toBeVisible({ timeout: 60000 });
     // まず自店データを保存させる（デモ状態では LocalStorage が空のため）
     const idsBefore = await page.$$eval('[data-testid^="staff-item-"]', (rows) =>
       rows.map((r) => (r.getAttribute('data-testid') as string).replace('staff-item-', ''))

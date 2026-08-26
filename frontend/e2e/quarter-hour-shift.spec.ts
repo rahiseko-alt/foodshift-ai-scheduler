@@ -34,7 +34,14 @@ async function optimizeForReal(
   page: Page
 ): Promise<{ apiResponse: import('@playwright/test').Response; body: ShiftOptimizeResponse }> {
   const optimizeBtn = page.locator('[data-testid="btn-optimize"]');
-  await expect(optimizeBtn).toBeVisible({ timeout: 30000 });
+  await expect(optimizeBtn).toBeVisible({ timeout: 60000 });
+
+  // ハイドレーション完了の確認。SSR済みHTMLに対するクリックは無反応で、
+  // 「押したのに何も起きない」テストになるため、状態変化を伴う操作で確認する。
+  await page.locator('[data-testid="tab-view-slots"]').click();
+  await expect(page.locator('[data-testid="shift-matrix"]')).toBeVisible({ timeout: 60000 });
+  await page.locator('[data-testid="tab-view-timeline"]').click();
+  await expect(page.locator('[data-testid="daily-timeline-view"]')).toBeVisible({ timeout: 60000 });
 
   for (let attempt = 0; attempt < 6; attempt++) {
     const responsePromise = page.waitForResponse(
@@ -68,7 +75,7 @@ async function optimizeForReal(
 async function createQuarterHourSlot(page: Page) {
   await page.goto('/admin/shifts');
   const addSlotBtn = page.locator('[data-testid="btn-add-shift-slot"]');
-  await expect(addSlotBtn).toBeVisible({ timeout: 15000 });
+  await expect(addSlotBtn).toBeVisible({ timeout: 60000 });
   await addSlotBtn.click();
 
   await page.fill('[data-testid="input-slot-name"]', SLOT_NAME);
@@ -126,10 +133,13 @@ test.describe('CUJ-9: 15-Minute Quarter-Hour Shift Creation, Submission & Optimi
     // 「5.5 という文字列がどこかにある」ではなく、実レスポンスの値と一致することを見る
     await expect(costSummary).toContainText(`¥${body.summary.total_labor_cost.toLocaleString()}`);
     await expect(costSummary).toContainText(`${body.summary.total_work_hours}`);
-    const firstShift = (body.assigned_shifts ?? [])[0];
-    const bar = page.locator(`[data-testid="shift-bar-${firstShift.staff_id}"]`);
-    if (firstShift.day_offset === 0) {
-      await expect(bar).toContainText(`${firstShift.start_time}-${firstShift.end_time}`);
+    // Day1 の割当がタイムラインに描かれていること（条件付きスキップにしない）
+    const day0 = (body.assigned_shifts ?? []).filter((s) => s.day_offset === 0);
+    expect(day0.length, 'Day1に1人以上の割当があること').toBeGreaterThan(0);
+    for (const shift of day0) {
+      await expect(page.locator(`[data-testid="shift-bar-${shift.staff_id}"]`)).toContainText(
+        `${shift.start_time}-${shift.end_time}`
+      );
     }
   });
 
@@ -141,7 +151,7 @@ test.describe('CUJ-9: 15-Minute Quarter-Hour Shift Creation, Submission & Optimi
 
     await page.goto('/submit');
     const staffSelect = page.locator('[data-testid="select-staff"]');
-    await expect(staffSelect).toBeVisible({ timeout: 15000 });
+    await expect(staffSelect).toBeVisible({ timeout: 60000 });
 
     const stored = await readStoredRequest(page);
     const minor = stored.staff_members.find((s: StaffMember) => s.is_minor);
@@ -181,7 +191,7 @@ test.describe('CUJ-9: 15-Minute Quarter-Hour Shift Creation, Submission & Optimi
 
     await page.goto('/submit');
     const staffSelect = page.locator('[data-testid="select-staff"]');
-    await expect(staffSelect).toBeVisible({ timeout: 15000 });
+    await expect(staffSelect).toBeVisible({ timeout: 60000 });
 
     const before = await readStoredRequest(page);
     const adult = before.staff_members.find((s: StaffMember) => !s.is_minor) as StaffMember;

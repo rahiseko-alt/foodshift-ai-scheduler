@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { ShiftOptimizeRequest, StaffMember } from '@/lib/types';
 import { decodeSubmissionCode, extractSubmissionCodesFromText, DecodedSubmission } from '@/lib/line-codec';
 import { saveRequest } from '@/lib/storage';
+import { deriveHourlyAvailability } from '@/lib/availability-bridge';
 
 interface LineImportModalProps {
   isOpen: boolean;
@@ -108,9 +109,30 @@ export const LineImportModal: React.FC<LineImportModalProps> = ({
     const newAvails = validResults.flatMap((r) => r.decoded.availabilities);
     const combinedAvail = [...remainingAvail, ...newAvails];
 
+    // 取り込んだ希望を、最適化が実際に読む側（hourly_availabilities）へも反映する。
+    //
+    // LINE提出コードが運ぶのは枠ベースの availabilities だけで、
+    // 管理画面の最適化は hourly_availabilities を読む経路に到達する。
+    // 変換していなかったため、**スタッフが「不可」と提出した日にも
+    // シフトが入れられていた**（提出も取り込みも成功と表示される）。
+    const remainingHourly = (requestData.hourly_availabilities || []).filter(
+      (a) => !updatedStaffIds.has(a.staff_id)
+    );
+    const newHourly = Array.from(updatedStaffIds).flatMap((staffId) => {
+      const member = requestData.staff_members.find((m) => m.id === staffId);
+      return deriveHourlyAvailability(
+        staffId,
+        requestData.period.days,
+        requestData.shifts,
+        combinedAvail,
+        member?.is_minor || false
+      );
+    });
+
     const updatedReq: ShiftOptimizeRequest = {
       ...requestData,
       availabilities: combinedAvail,
+      hourly_availabilities: [...remainingHourly, ...newHourly],
     };
 
     onUpdate(updatedReq);

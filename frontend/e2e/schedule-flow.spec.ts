@@ -30,7 +30,14 @@ const EV = '/tmp/claude-0/-home-user-foodshift-ai-scheduler/8cea9e3e-1847-5cca-a
  */
 async function optimizeForReal(page: Page): Promise<ShiftOptimizeResponse> {
   const optimizeBtn = page.locator('[data-testid="btn-optimize"]');
-  await expect(optimizeBtn).toBeVisible({ timeout: 30000 });
+  await expect(optimizeBtn).toBeVisible({ timeout: 60000 });
+
+  // ハイドレーション完了の確認。SSR済みHTMLに対するクリックは無反応で、
+  // 「押したのに何も起きない」テストになるため、状態変化を伴う操作で確認する。
+  await page.locator('[data-testid="tab-view-slots"]').click();
+  await expect(page.locator('[data-testid="shift-matrix"]')).toBeVisible({ timeout: 60000 });
+  await page.locator('[data-testid="tab-view-timeline"]').click();
+  await expect(page.locator('[data-testid="daily-timeline-view"]')).toBeVisible({ timeout: 60000 });
 
   for (let attempt = 0; attempt < 6; attempt++) {
     const responsePromise = page.waitForResponse(
@@ -78,7 +85,7 @@ test.describe('CUJ-1: Admin Schedule Optimization & Sharing Flow (実API)', () =
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
 
     await page.goto('/admin');
-    await expect(page.locator('[data-testid="btn-optimize"]')).toBeVisible();
+    await expect(page.locator('[data-testid="btn-optimize"]')).toBeVisible({ timeout: 60000 });
     // 最適化前はサマリーカードが存在しないこと（＝この後の数値が本当に今回の解由来である証拠）
     await expect(page.locator('[data-testid="cost-summary"]')).toHaveCount(0);
     await page.screenshot({ path: `${EV}/schedule-flow-01-before-optimize.png`, fullPage: true });
@@ -190,13 +197,12 @@ test.describe('CUJ-1: Admin Schedule Optimization & Sharing Flow (実API)', () =
     expect(stored?.assigned_shifts?.length).toBe((res.assigned_shifts ?? []).length);
   });
 
-  test('枠別マトリクスとCSV出力が、実レスポンスの割当を描画・出力すること', async ({ page }) => {
+  test('枠別マトリクスが、実レスポンスの割当を描画すること', async ({ page }) => {
     test.setTimeout(180000);
     await page.goto('/admin');
     const res = await optimizeForReal(page);
     const day0 = (res.assigned_shifts ?? []).filter((s) => s.day_offset === 0);
 
-    // 枠別マトリクス（従来ビュー）
     await page.locator('[data-testid="tab-view-slots"]').click();
     const matrix = page.locator('[data-testid="shift-matrix"]');
     await expect(matrix).toBeVisible();
@@ -213,8 +219,14 @@ test.describe('CUJ-1: Admin Schedule Optimization & Sharing Flow (実API)', () =
         `${shift.name} は Day1 に ${shift.start_time}-${shift.end_time} で出勤しているのに枠別マトリクスが空`
       ).not.toBe('-');
     }
+  });
 
-    // CSV出力（Excel用）の中身
+  test('CSVダウンロードの中身に、実レスポンスの割当が入っていること', async ({ page }) => {
+    test.setTimeout(180000);
+    await page.goto('/admin');
+    const res = await optimizeForReal(page);
+    const day0 = (res.assigned_shifts ?? []).filter((s) => s.day_offset === 0);
+
     const downloadPromise = page.waitForEvent('download');
     await page.locator('[data-testid="btn-download-csv"]').click();
     const download = await downloadPromise;
@@ -225,15 +237,15 @@ test.describe('CUJ-1: Admin Schedule Optimization & Sharing Flow (実API)', () =
     const csv = Buffer.concat(chunks).toString('utf-8');
     await page.screenshot({ path: `${EV}/schedule-flow-08-csv-downloaded.png`, fullPage: true });
 
+    // ファイル名だけを見るテストは、中身が空でも緑になる
     expect(csv).toContain('スタッフ名');
     for (const shift of day0) {
       const row = csv.split('\n').find((l) => l.startsWith(`"${shift.name}"`));
       expect(row, `${shift.name} の行がCSVに存在すること`).toBeTruthy();
       const day1Cell = (row as string).split(',')[3];
-      expect(
-        day1Cell,
-        `${shift.name} は Day1 に出勤しているのにCSVが「休」`
-      ).not.toBe('"休"');
+      expect(day1Cell, `${shift.name} は Day1 に ${shift.start_time}-${shift.end_time} で出勤しているのにCSVが「休」`).not.toBe(
+        '"休"'
+      );
     }
   });
 });

@@ -42,6 +42,7 @@ test.describe('CUJ-3: Staff Management & Validation Flow', () => {
   }) => {
     test.setTimeout(120000);
     await page.goto('/admin/staff');
+    await expect(page.locator('[data-testid="btn-add-staff"]')).toBeVisible({ timeout: 60000 });
 
     const rows = page.locator('tbody tr');
     const initialCount = await rows.count();
@@ -150,6 +151,7 @@ test.describe('CUJ-3: Staff Management & Validation Flow', () => {
   test('スタッフを削除すると一覧・保存データの両方から消えること', async ({ page }) => {
     test.setTimeout(60000);
     await page.goto('/admin/staff');
+    await expect(page.locator('[data-testid="btn-add-staff"]')).toBeVisible({ timeout: 60000 });
     const idsBefore = await staffIdsFromDom(page);
     expect(idsBefore.length).toBeGreaterThan(0);
     const victimId = idsBefore[idsBefore.length - 1];

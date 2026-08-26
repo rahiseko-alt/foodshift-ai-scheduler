@@ -61,10 +61,19 @@ test.describe('CUJ-10: PWA Manifest, Service Worker & Installability', () => {
   test('マニフェストが指すアイコンが実在する画像ファイルであること（200を返すHTMLではない）', async ({
     request,
   }) => {
-    const manifest = await (await request.get('/manifest.webmanifest')).json();
-    const srcs: string[] = Array.from(
-      new Set((manifest.icons as Array<{ src: string }>).map((i) => i.src))
-    );
+    // devサーバのコンパイル直後は 404 HTML が返ることがあるため、JSONが返るまで待つ
+    let manifest: { icons: Array<{ src: string; sizes: string }> } | null = null;
+    for (let i = 0; i < 10 && !manifest; i++) {
+      const r = await request.get('/manifest.webmanifest');
+      if (r.status() === 200 && (r.headers()['content-type'] || '').includes('json')) {
+        manifest = await r.json();
+      } else {
+        await new Promise((res) => setTimeout(res, 1000));
+      }
+    }
+    expect(manifest, 'マニフェストがJSONとして配信されること').toBeTruthy();
+    const icons = (manifest as { icons: Array<{ src: string; sizes: string }> }).icons;
+    const srcs: string[] = Array.from(new Set(icons.map((i) => i.src)));
     srcs.push('/icons/apple-touch-icon.png');
 
     for (const src of srcs) {
@@ -83,9 +92,7 @@ test.describe('CUJ-10: PWA Manifest, Service Worker & Installability', () => {
         // IHDR から実解像度を読み、宣言サイズと一致することを確認
         const width = buf.readUInt32BE(16);
         const height = buf.readUInt32BE(20);
-        const declared = (manifest.icons as Array<{ src: string; sizes: string }>).find(
-          (i) => i.src === src
-        )?.sizes;
+        const declared = icons.find((i) => i.src === src)?.sizes;
         if (declared && declared !== 'any') {
           expect(`${width}x${height}`, `${src} の実解像度が宣言と一致すること`).toBe(declared);
         }
@@ -126,6 +133,13 @@ test.describe('CUJ-10: PWA Manifest, Service Worker & Installability', () => {
         };
       }
       const reg = await navigator.serviceWorker.ready;
+      // activate は非同期に進むため、遷移途中(activating)を拾わないよう待つ。
+      // ここを待たずに1回サンプリングすると、登録自体は成功しているのに
+      // 「activating」で落ちるフレーキーなテストになる。
+      const activateDeadline = Date.now() + 10000;
+      while (reg.active?.state !== 'activated' && Date.now() < activateDeadline) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
       return {
         registrationCount: regs.length,
         scope: reg.scope,

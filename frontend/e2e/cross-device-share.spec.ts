@@ -110,6 +110,36 @@ test('CUJ-13: 店長の名簿がスタッフの別端末に届き、希望が店
     true
   );
 
+  // 14. スタッフの意思が、最適化が実際に読む側のデータに入っていること
+  //
+  // 管理画面の最適化は hourly_availabilities を読む経路に到達する。
+  // 従来この値はタップ内容を一切見ず is_available: true 固定で生成されており、
+  // **スタッフが「不可」と提出した日にもシフトが入れられていた**。
+  // availabilities（タップの記録）だけを見るテストでは検出できないため、
+  // ソルバーが読む側を直接検証する。
+  const storedHourly = await manager.evaluate(() => {
+    const raw = localStorage.getItem('foodshift_req_store_default');
+    return raw ? JSON.parse(raw).hourly_availabilities || [] : [];
+  });
+  const day0 = storedHourly.find(
+    (a: { staff_id: string; day_offset: number }) =>
+      a.staff_id === stored.staff_members[0].id && a.day_offset === 0
+  );
+  expect(day0, 'Day1 の勤務可能時間が保存されていない').toBeTruthy();
+  expect(day0.is_preferred, 'Day1 を希望したのに is_preferred が立っていない').toBe(true);
+  expect(day0.is_available, 'Day1 が出勤不可になっている').toBe(true);
+
+  // タップしていない日を勝手に「不可」にしない。
+  // 画面の既定表示は「－ 通常」なので、触っていない枠は出勤可能として扱う。
+  // ここが 'unavailable' だと、1枠だけタップして提出したスタッフが
+  // 残り全部「不可」の人として店長に届き、実際には出られる日にも
+  // 人員不足が発生する。
+  const untouched = storedHourly.find(
+    (a: { staff_id: string; day_offset: number }) =>
+      a.staff_id === stored.staff_members[0].id && a.day_offset === 2
+  );
+  expect(untouched.is_available, 'タップしていない日が不可になっている').toBe(true);
+
   await managerCtx.close();
   await staffCtx.close();
 });

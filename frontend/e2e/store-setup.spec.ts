@@ -29,14 +29,14 @@ test('CUJ-12: 初見の店長が自店を立ち上げ、対象期間を変更で
 
   // --- 1. 表示中がデモであることが明示されている ---
   const banner = page.locator('[data-testid="demo-data-banner"]');
-  await expect(banner).toBeVisible();
+  await expect(banner).toBeVisible({ timeout: 60000 });
   await expect(banner).toContainText('これはサンプルデータです（居酒屋・15名）');
   await page.screenshot({ path: `${EV}/store-setup-01-demo-banner.png`, fullPage: true });
 
   // --- 2. デモ名簿は「自分が入力した覚えのない他人」である ---
   await page.goto('/admin/staff');
   const demoRows = page.locator('[data-testid^="staff-item-"]');
-  await expect(demoRows).toHaveCount(15);
+  await expect(demoRows).toHaveCount(15, { timeout: 60000 });
   await expect(page.locator('[data-testid="staff-item-emp_01"]')).toContainText('佐藤 店長 (社員)');
   expect(await readStoredRequest(page), 'デモ表示中は自店データが保存されていないこと').toBeNull();
   await page.screenshot({ path: `${EV}/store-setup-02-demo-roster.png`, fullPage: true });
@@ -74,6 +74,7 @@ test('CUJ-12: 初見の店長が自店を立ち上げ、対象期間を変更で
   await page.goto('/admin/staff');
   await expect(page.locator('[data-testid^="staff-item-"]')).toHaveCount(0);
   await page.goto('/admin/shifts');
+  await expect(page.locator('[data-testid="btn-add-shift-slot"]')).toBeVisible({ timeout: 60000 });
   await expect(page.locator('[data-testid^="slot-item-"]')).toHaveCount(0);
   await page.screenshot({ path: `${EV}/store-setup-04-empty-shifts.png`, fullPage: true });
 

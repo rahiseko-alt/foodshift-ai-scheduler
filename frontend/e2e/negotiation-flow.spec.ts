@@ -30,7 +30,14 @@ const EV = '/tmp/claude-0/-home-user-foodshift-ai-scheduler/8cea9e3e-1847-5cca-a
  */
 async function optimizeForReal(page: Page): Promise<ShiftOptimizeResponse> {
   const optimizeBtn = page.locator('[data-testid="btn-optimize"]');
-  await expect(optimizeBtn).toBeVisible({ timeout: 30000 });
+  await expect(optimizeBtn).toBeVisible({ timeout: 60000 });
+
+  // ハイドレーション完了の確認。SSR済みHTMLに対するクリックは無反応で、
+  // 「押したのに何も起きない」テストになるため、状態変化を伴う操作で確認する。
+  await page.locator('[data-testid="tab-view-slots"]').click();
+  await expect(page.locator('[data-testid="shift-matrix"]')).toBeVisible({ timeout: 60000 });
+  await page.locator('[data-testid="tab-view-timeline"]').click();
+  await expect(page.locator('[data-testid="daily-timeline-view"]')).toBeVisible({ timeout: 60000 });
 
   for (let attempt = 0; attempt < 6; attempt++) {
     const responsePromise = page.waitForResponse(

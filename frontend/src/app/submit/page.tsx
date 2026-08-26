@@ -136,16 +136,51 @@ export default function SubmitPage() {
       (a) => a.staff_id !== selectedStaffId
     );
 
-    // 日ごとの希望時間帯（未成年者は22時以降制限）
+    // 日ごとの勤務可能時間帯を、実際にタップされた内容から組み立てる。
+    //
+    // 従来はタップ内容を一切見ず
+    //   is_available: true, is_preferred: d % 3 === 0
+    // という固定式で生成していた。管理画面の最適化は
+    // hourly_availabilities を読む経路に到達するため、
+    // **スタッフが「不可」と提出した日にもシフトが入れられていた**
+    // （希望も「3日ごと」という入力と無関係な値になっていた）。
+    const isMinor = currentStaff?.is_minor || false;
+    const hourOf = (time: string) => {
+      const [h, m] = time.split(':').map(Number);
+      return { floor: Math.floor(h + (m || 0) / 60), ceil: Math.ceil(h + (m || 0) / 60) };
+    };
+
     const newHourlyAvail = Array.from({ length: days }, (_, d) => {
-      const isMinor = currentStaff?.is_minor || false;
+      // その日に「不可」以外を選んだ枠だけが勤務可能時間の候補になる
+      const openShifts = requestData.shifts.filter(
+        (sh) => (availabilities[`${d}_${sh.id}`] || 'available') !== 'unavailable'
+      );
+      const wants = requestData.shifts.filter(
+        (sh) => availabilities[`${d}_${sh.id}`] === 'want'
+      );
+
+      if (openShifts.length === 0) {
+        // 全枠を「不可」にした日は終日不可として扱う
+        return {
+          staff_id: selectedStaffId,
+          day_offset: d,
+          available_from: 0,
+          available_to: 0,
+          is_available: false,
+          is_preferred: false,
+        };
+      }
+
+      const from = Math.min(...openShifts.map((sh) => hourOf(sh.start).floor));
+      const to = Math.max(...openShifts.map((sh) => hourOf(sh.end).ceil));
       return {
         staff_id: selectedStaffId,
         day_offset: d,
-        available_from: 10,
-        available_to: isMinor ? 22 : 24,
+        available_from: Math.max(0, Math.min(23, from)),
+        // 年少者は22時以降に入れないため、可能時間帯も22時で頭打ちにする
+        available_to: Math.max(1, Math.min(isMinor ? 22 : 24, to)),
         is_available: true,
-        is_preferred: d % 3 === 0,
+        is_preferred: wants.length > 0,
       };
     });
 

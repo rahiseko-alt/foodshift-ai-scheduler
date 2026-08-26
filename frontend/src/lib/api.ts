@@ -1,4 +1,5 @@
 import { ShiftOptimizeRequest, ShiftOptimizeResponse } from './types';
+import { normalizeOptimizeResponse } from './schedule-normalize';
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'https://foodshift-api.onrender.com';
@@ -46,7 +47,9 @@ export async function requestShiftOptimization(
     }
 
     const result: ShiftOptimizeResponse = await response.json();
-    return result;
+    // 1時間スロット経路のレスポンスは schedule が空で返る。
+    // 表示側が求解経路を意識しなくて済むよう、ここで一度だけ補完する。
+    return normalizeOptimizeResponse(data, result);
   } catch (err: unknown) {
     clearTimeout(warningTimer);
     clearTimeout(timeoutId);

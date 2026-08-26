@@ -110,7 +110,14 @@ export function encodeSubmissionCode(options: EncodeSubmissionOptions): string {
 
   for (let d = 0; d < days; d++) {
     for (const sId of shift_ids) {
-      const status = availMap[`${d}_${sId}`] || 'unavailable';
+      // 未タップの枠は「通常（＝出勤可能）」として送る。
+      //
+      // 画面の凡例は「希望 / 不可 / － 通常」であり、既定表示は「通常」。
+      // ここを 'unavailable' にしていたため、**スタッフが1枠だけタップして
+      // 提出すると、触っていない残り全部が「不可」として送信されていた**。
+      // 店長側では出勤できない人として扱われ、実際には出られる日にも
+      // 人員不足が出る。画面の表示と送信内容を一致させる。
+      const status = availMap[`${d}_${sId}`] || 'available';
       const bits = BigInt(STATUS_TO_BITS[status] ?? 0);
       bitVector = (bitVector << BigInt(2)) | bits;
     }
