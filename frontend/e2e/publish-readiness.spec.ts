@@ -42,3 +42,18 @@ test.describe('公開準備', () => {
     await page.screenshot({ path: `${EV}/10-staff-home-goes-to-top.png`, fullPage: true });
   });
 });
+
+test.describe('画面の到達性', () => {
+  test('需要予測ページへ管理画面のナビゲーションから到達できる', async ({ page }) => {
+    // 820行の実装がありながら、アプリ内のどこからもリンクされておらず
+    // URL直打ちでしか開けない孤児ルートになっていた
+    await page.goto('/admin');
+    const link = page.locator('a[href="/admin/forecast"]').first();
+    await expect(link).toBeVisible();
+    await link.click();
+    await expect(page).toHaveURL(/\/admin\/forecast$/);
+    // ページが実際に描画されていること（空でないこと）
+    await expect(page.locator('body')).toContainText('予測');
+    await page.screenshot({ path: `${EV}/11-forecast-reachable.png`, fullPage: true });
+  });
+});

@@ -12,6 +12,9 @@ export const AdminNavbar: React.FC = () => {
     { label: 'シフト作成・最適化', href: '/admin' },
     { label: 'スタッフマスタ管理', href: '/admin/staff' },
     { label: 'シフト枠・必要人数設定', href: '/admin/shifts' },
+    // 需要予測ページはこのリストに含まれておらず、アプリ内のどこからも
+    // リンクされていなかった（URL直打ちでしか到達できない孤児ルート）。
+    { label: '需要予測・人件費シミュレーション', href: '/admin/forecast' },
     { label: '機能解説・ルール仕様', href: '/admin/guide' },
   ];
 
