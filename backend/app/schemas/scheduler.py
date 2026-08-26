@@ -138,9 +138,15 @@ class StaffMemberSchema(BaseModel):
         default=30.0, ge=0.0, le=168.0, description="週間目標労働時間"
     )
     max_consecutive_days: int = Field(default=5, ge=1, le=7, description="最大連続勤務日数")
-    ng_staff_ids: list[str] = Field(default_factory=list, description="同時勤務NGスタッフIDリスト")
+    # 長さ上限が無いと、1MBのペイロード上限内でも巨大な配列を送れてしまう。
+    # NGペア・優先ペアの制約構築は O(スタッフ数^2 × シフト数 × 日数) のため、
+    # サーバーを長時間占有させられる。スタッフ数の上限(50)を超える指定は
+    # 意味を持たないので同じ値で頭打ちにする。
+    ng_staff_ids: list[str] = Field(
+        default_factory=list, max_length=50, description="同時勤務NGスタッフIDリスト"
+    )
     preferred_partner_ids: list[str] = Field(
-        default_factory=list, description="優先ペアスタッフIDリスト"
+        default_factory=list, max_length=50, description="優先ペアスタッフIDリスト"
     )
     min_days_per_period: int = Field(default=0, ge=0, description="期間内最小出勤日数")
     max_days_per_period: int = Field(default=31, ge=0, le=31, description="期間内最大出勤日数")
