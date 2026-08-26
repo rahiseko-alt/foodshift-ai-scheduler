@@ -106,9 +106,7 @@ def solve_hourly_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeR
         if staff.is_foreign_student:
             for start_d in range(0, num_days, 7):
                 end_d = min(start_d + 7, num_days)
-                week_work = sum(
-                    work[e, d, h] for d in range(start_d, end_d) for h in range(24)
-                )
+                week_work = sum(work[e, d, h] for d in range(start_d, end_d) for h in range(24))
                 model.Add(week_work <= 28)
 
     # 5. Hard制約: スタッフの時間帯希望（希望時間外の割当禁止）
@@ -271,7 +269,7 @@ def solve_hourly_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeR
                         required_count=req_c,
                         assigned_count=len(assigned_e_ids),
                         shortage=shortage_c,
-                        reason=f"{h}:00〜{h+1}:00 の人員不足",
+                        reason=f"{h}:00〜{h + 1}:00 の人員不足",
                     )
                 )
 
@@ -297,9 +295,7 @@ def solve_hourly_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeR
                     break_hours = break_min / 60.0
 
                     # 深夜業時間 (22:00〜05:00)
-                    night_hours = sum(
-                        1 for h in hours_worked if h >= 22 or h < 5
-                    )
+                    night_hours = sum(1 for h in hours_worked if h >= 22 or h < 5)
                     has_late_night = night_hours > 0
 
                     base_cost = int(math.floor(staff.hourly_wage * net_hours + 0.5))

@@ -56,10 +56,7 @@ def base_staff():
 def test_hourly_continuous_shift_generation(base_staff):
     """TV-H1: 1日1回連続勤務（飛び石なし、最低3h以上）の出退勤時間が動的に生成される。"""
     # 10:00〜14:00 (4時間) に各時間2名必要
-    reqs = [
-        HourlyRequirementSchema(day_offset=0, hour=h, min_staff=2)
-        for h in range(10, 14)
-    ]
+    reqs = [HourlyRequirementSchema(day_offset=0, hour=h, min_staff=2) for h in range(10, 14)]
     req = ShiftOptimizeRequest(
         period=PeriodSchema(start_date="2026-09-01", days=1),
         staff_members=base_staff,
@@ -84,10 +81,7 @@ def test_hourly_continuous_shift_generation(base_staff):
 def test_hourly_minor_night_prohibition(base_staff):
     """TV-H3: 年少者は22:00〜05:00のスロットに一切割り当てられない。"""
     # 18:00〜24:00 (6時間) に各時間1名必要
-    reqs = [
-        HourlyRequirementSchema(day_offset=0, hour=h, min_staff=1)
-        for h in range(18, 24)
-    ]
+    reqs = [HourlyRequirementSchema(day_offset=0, hour=h, min_staff=1) for h in range(18, 24)]
     req = ShiftOptimizeRequest(
         period=PeriodSchema(start_date="2026-09-01", days=1),
         staff_members=base_staff,
@@ -143,10 +137,7 @@ def test_hourly_staff_availability_preference(base_staff):
             is_preferred=True,
         )
     ]
-    reqs = [
-        HourlyRequirementSchema(day_offset=0, hour=h, min_staff=1)
-        for h in range(10, 20)
-    ]
+    reqs = [HourlyRequirementSchema(day_offset=0, hour=h, min_staff=1) for h in range(10, 20)]
     req = ShiftOptimizeRequest(
         period=PeriodSchema(start_date="2026-09-01", days=1),
         staff_members=base_staff,

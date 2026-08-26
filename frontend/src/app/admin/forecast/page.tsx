@@ -685,10 +685,12 @@ export default function ForecastAdminPage() {
                           style={{ transition: 'height 0.2s ease, y 0.2s ease' }}
                         >
                           <title>
-                            {h.hour}:00
-                            {'\n'}予測売上: ¥{h.predicted_sales.toLocaleString()}
-                            {'\n'}客数: {h.predicted_customers}名 (予約: {h.reserved_customers}名)
-                            {'\n'}推奨人数: {h.recommended_staff}名 (固定: {h.fixed_staff}名 / 変動: {h.variable_staff}名)
+                            {[
+                              `${h.hour}:00`,
+                              `予測売上: ¥${h.predicted_sales.toLocaleString()}`,
+                              `客数: ${h.predicted_customers}名 (予約: ${h.reserved_customers}名)`,
+                              `推奨人数: ${h.recommended_staff}名 (固定: ${h.fixed_staff}名 / 変動: ${h.variable_staff}名)`,
+                            ].join('\n')}
                           </title>
                         </rect>
                         {/* 時刻ラベル */}
