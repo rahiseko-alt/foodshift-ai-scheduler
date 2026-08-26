@@ -1,14 +1,41 @@
+# Render Blueprint（リポジトリルートの render.yaml のみが参照される）
+#
+# 以前は backend/render.yaml にも同名サービスの定義があり、ALLOWED_ORIGINS の
+# 値が食い違っていた。Render が読むのはルート側のみのため、backend 側は
+# 参照されないまま放置された残骸だった。混乱の元なので削除し一本化した。
 services:
   - type: web
     name: foodshift-api
     runtime: python
     rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     plan: free
     region: singapore
+    buildCommand: pip install -r requirements.txt
+
+    # --proxy-headers / --forwarded-allow-ips が無いと、uvicorn は
+    # X-Forwarded-For を信頼せず Render のプロキシ自身のIPを
+    # クライアントIPとして扱う。その結果 /api/v1/optimize の
+    # レート制限 (5/minute) が全利用者で共有され、
+    # 1人が5回操作すると全員が1分間ブロックされる状態だった。
+    # Render では外部からの通信が必ずプロキシを経由するため、
+    # このホスト構成において信頼して差し支えない。
+    startCommand: >-
+      uvicorn app.main:app --host 0.0.0.0 --port $PORT
+      --proxy-headers --forwarded-allow-ips='*'
+
+    # 無料枠のスリープからの復帰確認と、デプロイ成否の判定に使う
+    healthCheckPath: /api/v1/health
+
     envVars:
+      # production では Swagger UI (/docs) を閉じる。
+      # 未設定だと development 扱いになり、API仕様が公開されてしまう。
       - key: ENVIRONMENT
         value: production
+
+      # CORS 許可オリジン。
+      # 以前は Vercel の**プレビュー専用ホスト名**が直接書かれていたが、
+      # プレビューURLはデプロイごとに変わるため本番では必ず CORS が落ちる。
+      # 環境ごとに異なる値なので Render ダッシュボードで設定する。
+      # 例: https://your-app.vercel.app,http://localhost:3000
       - key: ALLOWED_ORIGINS
-        value: https://frontend-xi-six-10.vercel.app,https://frontend-6akl212se-rahisekos-projects.vercel.app,http://localhost:3000
+        sync: false
