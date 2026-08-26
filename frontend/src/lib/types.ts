@@ -149,6 +149,7 @@ export interface ScheduleSummary {
   deep_night_extra_cost?: number; // 22時以降深夜割増額 (25%)
   bottleneck_constraints?: string[]; // 制約ボトルネック分析
   compliance_warnings?: string[]; // 法令判定の安全側フォールバック等の警告
+  is_proven_optimal?: boolean; // CP-SATが最適性を証明できたか（時間切れの解はfalse）
   projected_sales?: number; // 想定売上 (円)
   labor_cost_ratio?: number; // 想定人件費率 (%)
   sales_per_labor_hour?: number; // 人時売上 (円/人時)

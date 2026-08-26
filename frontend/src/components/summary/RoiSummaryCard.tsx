@@ -160,7 +160,9 @@ export const RoiSummaryCard: React.FC<Props> = ({ summary, solveTimeMs }) => {
             {(solveTimeMs / 1000).toFixed(2)} <span style={{ fontSize: '0.875rem' }}>秒</span>
           </div>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-            CP-SAT 最適解確定
+            {summary.is_proven_optimal === false
+              ? 'CP-SAT 制限時間内の最良解'
+              : 'CP-SAT 最適解確定'}
           </div>
         </div>
       </div>

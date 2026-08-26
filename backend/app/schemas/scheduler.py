@@ -284,6 +284,10 @@ class ScheduleSummarySchema(BaseModel):
         default_factory=list,
         description="法令判定に関する警告（安全側フォールバックが作動した場合等）",
     )
+    is_proven_optimal: bool = Field(
+        default=True,
+        description="CP-SATが最適性を証明できたか（制限時間内に打ち切った解はFalse）",
+    )
 
 
 class ShiftOptimizeResponse(BaseModel):

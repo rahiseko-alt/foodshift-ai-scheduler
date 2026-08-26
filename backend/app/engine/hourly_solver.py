@@ -11,7 +11,7 @@ from app.engine.constraints import (
     is_staff_minor,
 )
 from app.engine.helpers import add_consecutive_days_constraint, add_rolling_window_limit
-from app.engine.time_utils import build_hourly_requirements_from_shifts
+from app.engine.time_utils import build_hourly_requirements_from_shifts, parse_time_to_minutes
 from app.schemas.scheduler import (
     AssignedShiftTimeSchema,
     HourlyScheduleSlotSchema,
@@ -37,8 +37,12 @@ def solve_hourly_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeR
 
     # 1時間ごとの必要人数マップ: (day_offset, hour) -> min_staff
     req_map: dict[tuple[int, int], int] = {}
+    # 1時間ごとの必須ロールマップ: (day_offset, hour) -> {role: 必要数}
+    role_req_map: dict[tuple[int, int], dict[str, int]] = {}
     for r in request.hourly_requirements:
         req_map[(r.day_offset, r.hour)] = r.min_staff
+        if r.required_roles:
+            role_req_map[(r.day_offset, r.hour)] = r.required_roles
 
     # 従来の固定枠 requirements からの自動変換（hourly_requirements が空の場合）
     if not request.hourly_requirements and request.shifts and request.requirements:
@@ -174,7 +178,77 @@ def solve_hourly_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeR
             else:
                 under_cover[d, h] = model.NewIntVar(0, 0, f"under_cover_d{d}_h{h}")
 
+    # 9b. Hard制約: 必須ロール要件（例: kitchen 1名常駐）
+    #
+    # `HourlyRequirementSchema.required_roles` はスキーマに存在するが
+    # このソルバーで一度も読まれておらず、管理画面からの最適化は全て
+    # ここに到達するため「調理できるスタッフが1人もいないシフト」が
+    # 正常解として出力されていた。人数要件と同じくスラック変数で緩和し、
+    # 不足時は解なしではなく不足として可視化する。
+    for (d, h), roles in role_req_map.items():
+        if d >= num_days:
+            continue
+        for role_name, min_role_count in roles.items():
+            if min_role_count <= 0:
+                continue
+            capable = [e for e, st in enumerate(request.staff_members) if role_name in st.roles]
+            role_under = model.NewIntVar(0, min_role_count, f"role_under_d{d}_h{h}_{role_name}")
+            if capable:
+                model.Add(sum(work[e, d, h] for e in capable) + role_under >= min_role_count)
+            else:
+                # 該当ロール保有者が1人もいない場合は全量不足として計上する
+                model.Add(role_under == min_role_count)
+            # 人数不足(10,000)より重く扱う: 頭数が揃っていても職能が欠ければ店は回らない
+            obj_vars.append(role_under)
+            obj_coeffs.append(20000)
+
+    # 9c. Hard制約: 固定割当 (fixed_assignments)
+    #
+    # 店長が手で確定した配置・交渉で確保したスタッフを保持する。
+    # 従来このソルバーでは完全に無視されており、再最適化のたびに消えていた。
+    # 時間帯まで指定されたシフト枠が特定できる場合はその時間も固定する。
+    shift_span_by_id = {}
+    for sh in request.shifts:
+        s_min = parse_time_to_minutes(sh.start)
+        e_min = parse_time_to_minutes(sh.end)
+        if e_min <= s_min:
+            e_min += 24 * 60
+        shift_span_by_id[sh.id] = (s_min // 60, -(-e_min // 60))
+
+    for fa in request.fixed_assignments:
+        if fa.staff_id not in staff_id_to_idx or fa.day_offset >= num_days:
+            continue
+        e_idx = staff_id_to_idx[fa.staff_id]
+        model.Add(day_worked[e_idx, fa.day_offset] == 1)
+        span = shift_span_by_id.get(fa.shift_id)
+        if span:
+            s_h, e_h = span
+            for h in range(s_h, e_h):
+                model.Add(work[e_idx, fa.day_offset, h % 24] == 1)
+
+    # 9d. Hard制約: 期間内の出勤日数の上下限
+    #
+    # 「週3日は必ず入れる」「月10日まで」といった契約上の約束。
+    # min は緩和変数を持たないと週上限と衝突して INFEASIBLE になるため、
+    # 不足として緩和し理由を可視化する（constraints.py 側は Hard のまま）。
+    for e_idx, staff in enumerate(request.staff_members):
+        total_days = sum(day_worked[e_idx, d] for d in range(num_days))
+        if staff.min_days_per_period > 0:
+            effective_min = min(staff.min_days_per_period, num_days)
+            days_under = model.NewIntVar(0, effective_min, f"days_under_e{e_idx}")
+            model.Add(total_days + days_under >= effective_min)
+            obj_vars.append(days_under)
+            obj_coeffs.append(5000)
+        if staff.max_days_per_period < num_days:
+            model.Add(total_days <= staff.max_days_per_period)
+
     # 10. 目的関数: 人件費（時給・深夜割増）および 希望日ボーナス
+    # 希望ボーナスの上限: 最も安いスタッフが最低勤務時間だけ働いたときのコスト未満。
+    # これを超えると「働くこと自体が得」になり需要のない出勤が発生する。
+    cheapest_hourly_coeff = min((st.hourly_wage // 100) for st in request.staff_members)
+    cheapest_day_cost = max(1, cheapest_hourly_coeff * request.min_shift_hours)
+    preference_bonus = max(1, cheapest_day_cost - 1)
+
     for e, staff in enumerate(request.staff_members):
         wage = staff.hourly_wage
         for d in range(num_days):
@@ -190,10 +264,17 @@ def solve_hourly_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeR
                 obj_vars.append(work[e, d, h])
                 obj_coeffs.append(hourly_cost // 100)
 
-            # 希望日出勤ボーナス (-500)
+            # 希望日出勤ボーナス
+            #
+            # 従来は -500 の固定値だったが、1時間あたりのコスト係数は
+            # hourly_cost // 100 = 約10〜12 でしかない。最低勤務時間3hでも
+            # 1日working するコストは約30であり、ボーナスがそれを大きく上回るため
+            # **需要がゼロの日にも希望というだけで出勤させる**状態だった。
+            # 「1日働いて得られるボーナス < その1日の最低コスト」を満たす値にし、
+            # 希望が新たな需要を生まないようにする（同条件での優先順位付けには効く）。
             if is_pref:
                 obj_vars.append(day_worked[e, d])
-                obj_coeffs.append(-500)
+                obj_coeffs.append(-preference_bonus)
 
     model.Minimize(
         cp_model.LinearExpr.WeightedSum(
@@ -205,7 +286,15 @@ def solve_hourly_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeR
     # ソルバーの実行
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 4.0
+    # ワーカー数について（実測に基づく意図的な選択）:
+    # 同一入力でも解が変わる問題を単一ワーカー化で解消しようとしたが、
+    # 15人×14日で不足154枠（店が回らない解）しか出せず、
+    # 制限時間を20秒に延ばしても改善しなかった。時間ではなく探索戦略の問題。
+    #   workers=1 -> 決定的だが 不足154枠 / workers=4 -> 不足0枠だが非決定的
+    # 「まず使えること」を優先し品質を採る。再現性が無いことは
+    # is_proven_optimal で正直に表示し、「最適解確定」とは名乗らない。
     solver.parameters.num_search_workers = 4
+    solver.parameters.random_seed = 0
     solver.parameters.relative_gap_limit = 0.05
 
     solve_status = solver.Solve(model)
@@ -360,6 +449,10 @@ def solve_hourly_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeR
         unfilled_requirements=unfilled_requirements,
         bottleneck_constraints=[],
         compliance_warnings=compliance_warnings,
+        # CP-SAT が最適性を証明できたか。制限時間内に打ち切った解は FEASIBLE であり
+        # 「最適解確定」ではない。従来は実ステータスを捨てて unfilled の有無だけで
+        # OPTIMAL を名乗っていたため、同一入力で異なる解が全て「最適」と表示されていた。
+        is_proven_optimal=(solve_status == cp_model.OPTIMAL),
     )
 
     return ShiftOptimizeResponse(
