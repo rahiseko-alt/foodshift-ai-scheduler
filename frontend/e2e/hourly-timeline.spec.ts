@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+const EVIDENCE = '/tmp/claude-0/-home-user-foodshift-ai-scheduler/8cea9e3e-1847-5cca-ac45-5ec023e8495a/scratchpad/evidence/a1';
+
 test.describe('CUJ-11: 1-Hour Time-Slot Shift & Dual-View (Daily Timeline & Monthly Matrix)', () => {
   test('should optimize with hourly time-slots, render 15-minute dotted grid, top-required/bottom-actual split, 15-min resize handles and Home button', async ({
     page,
@@ -7,6 +9,13 @@ test.describe('CUJ-11: 1-Hour Time-Slot Shift & Dual-View (Daily Timeline & Mont
   }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     // 1. API モックレスポンスを設定 (15分刻みシフト)
+    //
+    // ここで返す値をそのままアサートすると「モックが返した文字列を
+    // 読み返しただけ」の閉ループになる。そうならないよう、以下では
+    //   - 必要人数（画面はリクエスト側の hourly_requirements から描く）
+    //   - 実配置人数（バーの重なりから画面側で数え直す値）
+    //   - リサイズ後の休憩時間・実働時間（労基法計算を通した派生値）
+    // といった「レスポンスに書いていない値」を検証対象にする。
     await page.route('**/api/v1/optimize', async (route) => {
       await route.fulfill({
         status: 200,
@@ -79,17 +88,37 @@ test.describe('CUJ-11: 1-Hour Time-Slot Shift & Dual-View (Daily Timeline & Mont
     await expect(optimizeBtn).toBeVisible();
     await optimizeBtn.click();
 
-    // サマリー表示の待機
-    await expect(page.locator('[data-testid="roi-summary-card"]')).toBeVisible({ timeout: 10000 });
+    // サマリー表示の待機。金額・充足率が実際に整形描画されていること
+    // （カードが「見えている」だけでは中身が空でも通ってしまう）
+    const summaryCard = page.locator('[data-testid="cost-summary"]');
+    await expect(summaryCard).toBeVisible({ timeout: 10000 });
+    await expect(summaryCard).toContainText('¥320,000');
+    await expect(summaryCard).toContainText('100%');
+    await expect(page.locator('[data-testid="shortage-alert"]')).toHaveCount(0);
 
     // 4. 【日別タイムラインビュー】の検証
     await expect(page.locator('[data-testid="daily-timeline-view"]')).toBeVisible();
 
-    // ③ 上が必要 / 下が配置（要 5 / 配 2 等）の検証
+    // ③ 上が必要 / 下が配置 の検証。
+    //    「要」「配」という固定ラベル文字の有無だけを見ていたため、
+    //    数値が 0 でも空でも通る恒真アサーションになっていた。
+    //    12時は必要5名（店舗設定側の値）に対し、10:15-15:45 と 10:00-14:30 の
+    //    2本のバーが重なるので配置2名になるはず。
     const stat12 = page.locator('[data-testid="hourly-stat-12"]');
     await expect(stat12).toBeVisible();
-    await expect(stat12).toContainText('要');
-    await expect(stat12).toContainText('配');
+    await expect(stat12).toContainText('要 5');
+    await expect(stat12).toContainText('配 2');
+
+    // 10時台は 10:15 開始の途中出勤も「その時間に勤務している」ので配置2名。
+    // 時間の重なり判定を「開始が時刻ちょうど以前」にすり替えると 1名になる。
+    await expect(page.locator('[data-testid="hourly-stat-10"]')).toContainText('要 2');
+    await expect(page.locator('[data-testid="hourly-stat-10"]')).toContainText('配 2');
+    // 15時台は 10:15-15:45 の1本だけが重なる（配置1名）
+    await expect(page.locator('[data-testid="hourly-stat-15"]')).toContainText('配 1');
+    // 20時台は誰も勤務していない（配置0名 / 必要6名 = 不足表示）
+    await expect(page.locator('[data-testid="hourly-stat-20"]')).toContainText('配 0');
+
+    await page.screenshot({ path: `${EVIDENCE}/hourly-timeline-01-hourly-stats.png`, fullPage: true });
 
     // ① 15分刻み点線サブスロット（10:15, 10:30, 10:45）の存在確認
     const subslot15 = page.locator('[data-testid="subslot-10-15"]').first();
@@ -103,21 +132,35 @@ test.describe('CUJ-11: 1-Hour Time-Slot Shift & Dual-View (Daily Timeline & Mont
     const shiftBar = page.locator('[data-testid="shift-bar-emp_01"]');
     await expect(shiftBar).toBeVisible();
     await expect(shiftBar).toContainText('10:15-15:45');
+    await expect(shiftBar).toContainText('(5.5h)');
 
-    // ★ 希望シフト下敷きバー（薄い青色）の存在検証
+    // ★ 希望シフト下敷きバー（薄い青色）は「希望:」というラベルの有無ではなく、
+    //    店舗設定側の希望時間帯（emp_01 は 10時〜24時）が出ているかを見る
     const prefShiftBar = page.locator('[data-testid="pref-shift-bar-emp_01"]');
     await expect(prefShiftBar).toBeVisible();
-    await expect(prefShiftBar).toContainText('希望:');
+    await expect(prefShiftBar).toContainText('希望: 10:00-24:00');
 
     const resizeStart = page.locator('[data-testid="resize-start-emp_01"]');
     const resizeEnd = page.locator('[data-testid="resize-end-emp_01"]');
     await expect(resizeStart).toBeVisible();
     await expect(resizeEnd).toBeVisible();
 
-    // 5. 【月間スタッフ一覧マトリクスビュー】への切り替えと検証
+    await page.screenshot({ path: `${EVIDENCE}/hourly-timeline-02-shift-bar.png`, fullPage: true });
+
+    // 5. 【月間スタッフ一覧マトリクスビュー】への切り替えと検証。
+    //    コンテナが見えるだけでは中身が空でも通るため、
+    //    Day1 のセルに実際の勤務時間が入っていることまで見る。
     const monthlyTab = page.locator('[data-testid="tab-view-monthly"]');
     await monthlyTab.click();
     await expect(page.locator('[data-testid="monthly-matrix-view"]')).toBeVisible();
+    const monthlyCell = page.locator('[data-testid="cell-emp_01-0"]');
+    await expect(monthlyCell).toContainText('10-15');
+    await expect(monthlyCell).toContainText('5.5h');
+    await expect(page.locator('[data-testid="cell-emp_02-0"]')).toContainText('10-14');
+    // 出勤していない日は空欄（セル自体が生成されない）
+    await expect(page.locator('[data-testid="cell-emp_01-1"]')).toHaveCount(0);
+
+    await page.screenshot({ path: `${EVIDENCE}/hourly-timeline-03-monthly-matrix.png`, fullPage: true });
 
     // 6. 再度日別タイムラインに戻る
     const timelineTab = page.locator('[data-testid="tab-view-timeline"]');
@@ -138,5 +181,36 @@ test.describe('CUJ-11: 1-Hour Time-Slot Shift & Dual-View (Daily Timeline & Mont
     expect(clipboardText).toContain('【FoodShift 確定シフト】');
     expect(clipboardText).toContain('佐藤 店長 (社員)');
     expect(clipboardText).toContain('10:15-15:45');
+    expect(clipboardText).toContain('田中 副店長 (社員)');
+    expect(clipboardText).toContain('10:00-14:30');
+
+    // 8. ★ リサイズハンドルは「見えている」だけでは意味がない。
+    //    実際に右端を 18:00 までドラッグし、
+    //    勤務時間・休憩時間（労基法第34条: 6時間超で45分）が
+    //    再計算されて画面が変化することを確認する。
+    const slotsRow = page.locator('[data-testid="timeline-slots-emp_01"]');
+    const rowBox = await slotsRow.boundingBox();
+    expect(rowBox).not.toBeNull();
+    const handleBox = await resizeEnd.boundingBox();
+    expect(handleBox).not.toBeNull();
+
+    // タイムラインは 9:00〜24:00 の 900分。18:00 は左端から 60%
+    const targetX = rowBox!.x + rowBox!.width * ((18 * 60 - 9 * 60) / 900);
+    const centerY = rowBox!.y + rowBox!.height / 2;
+
+    await page.mouse.move(handleBox!.x + handleBox!.width / 2, centerY);
+    await page.mouse.down();
+    await page.mouse.move(targetX, centerY, { steps: 10 });
+    await page.mouse.up();
+
+    // 終了時刻が 18:00 になり、実働は 7.75h - 休憩45分 = 7h に再計算される
+    await expect(shiftBar).toContainText('10:15-18:00');
+    await expect(shiftBar).toContainText('(7h)');
+    await expect(page.locator('[data-testid="admin-toast-banner"]')).toContainText('10:15〜18:00');
+
+    // 配置人数の集計もドラッグ結果に追随する（17時台は元は0名）
+    await expect(page.locator('[data-testid="hourly-stat-17"]')).toContainText('配 1');
+
+    await page.screenshot({ path: `${EVIDENCE}/hourly-timeline-04-after-resize.png`, fullPage: true });
   });
 });

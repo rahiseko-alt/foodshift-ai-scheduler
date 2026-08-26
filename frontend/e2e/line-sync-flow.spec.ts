@@ -1,5 +1,14 @@
 import { test, expect } from '@playwright/test';
 
+const EVIDENCE = '/tmp/claude-0/-home-user-foodshift-ai-scheduler/8cea9e3e-1847-5cca-ac45-5ec023e8495a/scratchpad/evidence/a1';
+
+interface StoredAvailability {
+  staff_id: string;
+  day_offset: number;
+  shift_id: string;
+  status: string;
+}
+
 test.describe('CUJ-7: LINE Submission & Manager Bulk Import Flow (0-Yen Stateless Sync)', () => {
   test('should generate LINE submission code on staff submit and successfully import it on admin dashboard', async ({
     page,
@@ -8,20 +17,41 @@ test.describe('CUJ-7: LINE Submission & Manager Bulk Import Flow (0-Yen Stateles
     await page.goto('/submit');
 
     // 2. スタッフを選択
-    const staffSelect = page.locator('#staff-select');
+    const staffSelect = page.locator('[data-testid="select-staff"]');
     await expect(staffSelect).toBeVisible();
     await staffSelect.selectOption({ index: 1 }); // 2番目のスタッフを選択
+    const staffId = await staffSelect.inputValue();
+    const staffName = (
+      await staffSelect.locator(`option[value="${staffId}"]`).textContent()
+    )?.trim();
+    expect(staffId).not.toBe('');
+    expect(staffName).toBeTruthy();
 
-    // 3. Day1 の枠をタップして「希望」にする
+    // 3. 3状態（希望 / 可 / 不可）すべてを実際にタップして作る。
     //
     // 以前は `if (count > 0)` で囲まれた曖昧なテキスト検索で、
     // 一致しなければ何もタップせずに素通りしていた。その結果
     // 希望ゼロのコード（FS2|...|1|）を提出しており、
     // 「提出して取り込む」という筋書きでありながら中身を一切検証できていなかった。
-    const firstSlot = page.locator('[data-testid^="btn-slot-0-"]').first();
-    await expect(firstSlot).toBeVisible();
-    await firstSlot.click(); // available -> want
-    await expect(firstSlot).toContainText('希望');
+    // さらに「希望が1つでもある」だけでは 2bit エンコードの取り違えを
+    // 検出できないため、3状態を別々の枠に作り分けて往復させる。
+    const wantA = page.locator('[data-testid="btn-slot-0-morning"]');
+    const wantB = page.locator('[data-testid="btn-slot-3-dinner"]');
+    const availableSlot = page.locator('[data-testid="btn-slot-5-late_night"]');
+
+    await wantA.click(); // available -> want
+    await expect(wantA).toContainText('希望 希望');
+    await wantB.click(); // available -> want
+    await expect(wantB).toContainText('希望 希望');
+
+    await availableSlot.click(); // -> want
+    await expect(availableSlot).toContainText('希望 希望');
+    await availableSlot.click(); // -> unavailable
+    await expect(availableSlot).toContainText('不可 不可');
+    await availableSlot.click(); // -> available (通常)
+    await expect(availableSlot).toContainText('－ 通常');
+
+    await page.screenshot({ path: `${EVIDENCE}/line-sync-01-staff-input.png`, fullPage: true });
 
     // 4. 「シフト希望を提出する」を押下
     const submitBtn = page.locator('[data-testid="btn-submit-availability"]');
@@ -32,16 +62,19 @@ test.describe('CUJ-7: LINE Submission & Manager Bulk Import Flow (0-Yen Stateles
     const banner = page.locator('[data-testid="submit-success-banner"]');
     await expect(banner).toBeVisible();
 
-    const codeContainer = page.locator('text=FS2|');
-    await expect(codeContainer).toBeVisible();
-    const fullText = await codeContainer.textContent();
+    const fullText = (await banner.textContent()) || '';
     expect(fullText).toContain('FS2|');
 
     // 提出コードを抽出
     // FS2 は日数フィールドを持つ（送信側と受信側の日数不一致による破損を防ぐため）
-    const match = fullText?.match(/FS2\|[a-zA-Z0-9_\-]+\|\d{4}-\d{2}-\d{2}\|\d+\|[a-zA-Z0-9]+\|[0-9a-fA-F]{4}/);
+    const match = fullText.match(/FS2\|[a-zA-Z0-9_\-]+\|\d{4}-\d{2}-\d{2}\|\d+\|[a-zA-Z0-9]+\|[0-9a-fA-F]{4}/);
     expect(match).not.toBeNull();
     const lineCode = match ? match[0] : '';
+    // コードの staff_id / 日数が実際に選んだ内容と一致していること
+    expect(lineCode.split('|')[1]).toBe(staffId);
+    expect(lineCode.split('|')[3]).toBe('7');
+
+    await page.screenshot({ path: `${EVIDENCE}/line-sync-02-submission-code.png`, fullPage: true });
 
     // 6. 店長画面 (/admin) に遷移
     await page.goto('/admin');
@@ -57,41 +90,66 @@ test.describe('CUJ-7: LINE Submission & Manager Bulk Import Flow (0-Yen Stateles
     await lineTextArea.fill(`店長お疲れ様です！希望提出します！ ${lineCode} よろしくお願いします！`);
 
     // 9. 「提出コードを解析する」を押下
-    const analyzeBtn = page.locator('button:has-text("提出コードを解析する")');
-    await analyzeBtn.click();
+    await page.getByRole('button', { name: '提出コードを解析する' }).click();
 
-    // 10. 解析結果プレビューに「取込可能」バッジが表示されることを確認
-    const validBadge = page.locator('text=取込可能');
-    await expect(validBadge).toBeVisible();
+    // 10. 解析結果プレビューが「誰の・どんな中身か」まで表示していることを確認。
+    //     バッジの有無だけでは、全枠 unavailable の空提出でも通ってしまう。
+    await expect(page.getByText('取込可能', { exact: true })).toBeVisible();
+    await expect(page.locator('span', { hasText: staffName as string }).last()).toBeVisible();
+    const breakdown = page.getByText(/希望 \d+枠 \/ 可 \d+枠 \/ 不可 \d+枠/);
+    await expect(breakdown).toBeVisible();
+    // 内訳は 14日 × 3枠 = 42枠。うちスタッフ画面で触れるのは直近7日分のみで、
+    // 8日目以降（21枠）は提出範囲外のため「不可」として取り込まれる。
+    // ここを固定しておくと、日数のズレや状態の取り違えが数字に必ず出る。
+    await expect(breakdown).toContainText('希望 2枠');
+    await expect(breakdown).toContainText('可 1枠');
+    await expect(breakdown).toContainText('不可 39枠');
+
+    await page.screenshot({ path: `${EVIDENCE}/line-sync-03-import-preview.png`, fullPage: true });
 
     // 11. 「有効な 1 件を一括反映する」を押下
-    const applyBtn = page.locator('button:has-text("一括反映する")');
+    const applyBtn = page.getByRole('button', { name: /一括反映する/ });
     await expect(applyBtn).toBeVisible();
+    await expect(applyBtn).toBeEnabled();
     await applyBtn.click();
 
     // 12. トースト通知が表示され、モーダルが閉じることを確認
     const toast = page.locator('[data-testid="admin-toast-banner"]');
     await expect(toast).toBeVisible({ timeout: 5000 });
-    await expect(toast).toContainText('LINEから');
+    await expect(toast).toContainText('LINEから 1 名分');
+    await expect(lineTextArea).toHaveCount(0);
 
-    // 13. 取り込んだ希望が「入力した日付のまま」保存されていること
+    await page.screenshot({ path: `${EVIDENCE}/line-sync-04-import-applied.png`, fullPage: true });
+
+    // 13. 取り込んだ希望が「入力した日付・枠のまま」保存されていること
     //
     // 従来はスタッフ側が7日分で送信し店長側が14日分として解釈していたため、
     // Day1〜7 の希望が Day8〜14 にズレて取り込まれ、Day1〜7 は全て「不可」に
     // なっていた。しかもエラーにならず成功トーストが出るため誰も気づけなかった。
-    // 形式の検証だけでは検出できないので、日付の整合そのものを検証する。
+    // 形式の検証だけでは検出できないので、枠ごとの状態そのものを検証する。
     const stored = await page.evaluate(() => {
       const raw = localStorage.getItem('foodshift_req_store_default');
-      return raw ? JSON.parse(raw) : null;
+      return raw ? (JSON.parse(raw) as { availabilities: StoredAvailability[] }) : null;
     });
     expect(stored).not.toBeNull();
-    const submitted = (stored.availabilities || []).filter(
-      (a: { status: string }) => a.status !== 'unavailable'
+
+    const mine = (stored as { availabilities: StoredAvailability[] }).availabilities.filter(
+      (a) => a.staff_id === staffId
     );
-    expect(submitted.length).toBeGreaterThan(0);
+    const statusAt = (day: number, shift: string) =>
+      mine.find((a) => a.day_offset === day && a.shift_id === shift)?.status;
+
+    expect(statusAt(0, 'morning')).toBe('want');
+    expect(statusAt(3, 'dinner')).toBe('want');
+    expect(statusAt(5, 'late_night')).toBe('available');
+    expect(mine.filter((a) => a.status === 'want')).toHaveLength(2);
+    expect(mine.filter((a) => a.status === 'available')).toHaveLength(1);
+
     // スタッフ画面は直近7日分しか入力できないため、
     // 取り込み結果が8日目以降に現れたら日付がズレている
-    const maxDay = Math.max(...submitted.map((a: { day_offset: number }) => a.day_offset));
+    const submitted = mine.filter((a) => a.status !== 'unavailable');
+    expect(submitted.length).toBeGreaterThan(0);
+    const maxDay = Math.max(...submitted.map((a) => a.day_offset));
     expect(maxDay).toBeLessThan(7);
   });
 });

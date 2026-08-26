@@ -9,6 +9,23 @@ import { OfflineBanner } from '@/components/navigation/OfflineBanner';
 import { encodeSubmissionCode } from '@/lib/line-codec';
 import { decodeRoster, readRosterFragment } from '@/lib/roster-share';
 
+/**
+ * 希望入力のキー `<day_offset>_<shift_id>` を分解する。
+ *
+ * `key.split('_')` で分割していたため、`late_night` のように
+ * アンダースコアを含むシフト枠IDだと shift_id が `late` に化けていた。
+ * 化けた枠は保存データにもLINE提出コードにも「その枠の希望」として
+ * 残らず、スタッフが「不可」にしたはずの深夜枠が黙って消えていた。
+ * 最初のアンダースコアだけを区切りとして扱う。
+ */
+function parseSlotKey(key: string): { dayOffset: number; shiftId: string } {
+  const sep = key.indexOf('_');
+  return {
+    dayOffset: parseInt(key.slice(0, sep), 10),
+    shiftId: key.slice(sep + 1),
+  };
+}
+
 export default function SubmitPage() {
   const [requestData, setRequestData] = useState<ShiftOptimizeRequest | null>(null);
   const [response, setResponse] = useState<ShiftOptimizeResponse | null>(null);
@@ -106,10 +123,10 @@ export default function SubmitPage() {
     );
 
     const newStaffAvail = Object.entries(availabilities).map(([key, status]) => {
-      const [dStr, shiftId] = key.split('_');
+      const { dayOffset, shiftId } = parseSlotKey(key);
       return {
         staff_id: selectedStaffId,
-        day_offset: parseInt(dStr, 10),
+        day_offset: dayOffset,
         shift_id: shiftId,
         status,
       };
@@ -505,10 +522,10 @@ export default function SubmitPage() {
                   days,
                   shift_ids: shifts.map((s) => s.id),
                   availabilities: Object.entries(availabilities).map(([key, status]) => {
-                    const [dStr, shiftId] = key.split('_');
+                    const { dayOffset, shiftId } = parseSlotKey(key);
                     return {
                       staff_id: selectedStaffId,
-                      day_offset: parseInt(dStr, 10),
+                      day_offset: dayOffset,
                       shift_id: shiftId,
                       status,
                     };
@@ -527,10 +544,10 @@ export default function SubmitPage() {
                       days,
                       shift_ids: shifts.map((s) => s.id),
                       availabilities: Object.entries(availabilities).map(([key, status]) => {
-                        const [dStr, shiftId] = key.split('_');
+                        const { dayOffset, shiftId } = parseSlotKey(key);
                         return {
                           staff_id: selectedStaffId,
-                          day_offset: parseInt(dStr, 10),
+                          day_offset: dayOffset,
                           shift_id: shiftId,
                           status,
                         };
