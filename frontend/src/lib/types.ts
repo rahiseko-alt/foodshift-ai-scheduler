@@ -78,6 +78,7 @@ export interface StaffHourlyAvailability {
 }
 
 export interface ShiftOptimizeRequest {
+  store_name?: string; // 店舗名（端末内のみ。APIへは送られるが保存されない）
   period: Period;
   shifts: Shift[];
   staff_members: StaffMember[];
