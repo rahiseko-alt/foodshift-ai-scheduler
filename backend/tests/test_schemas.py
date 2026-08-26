@@ -292,3 +292,40 @@ def test_shift_requirement_schema_min_staff_upper_bound():
             shift_id="s1",
             min_staff=51,
         )
+
+
+def test_calendar_invalid_birth_date_rejected():
+    """正規表現は通るが暦として存在しない生年月日は 422 相当で拒否される。"""
+    for bad in ("2010-13-01", "2010-02-30", "2010-00-15", "2011-04-31"):
+        with pytest.raises(ValidationError):
+            StaffMemberSchema(
+                id="s1", name="テスト", roles=["hall"], hourly_wage=1000, birth_date=bad
+            )
+
+
+def test_leap_day_birth_date_accepted():
+    """実在する閏日は受理される（過剰厳格化の防止）。"""
+    staff = StaffMemberSchema(
+        id="s1", name="テスト", roles=["hall"], hourly_wage=1000, birth_date="2008-02-29"
+    )
+    assert staff.birth_date == "2008-02-29"
+
+
+def test_future_birth_date_rejected():
+    """未来日の生年月日は拒否される（負の年齢による誤判定を防ぐ）。"""
+    with pytest.raises(ValidationError):
+        StaffMemberSchema(
+            id="s1", name="テスト", roles=["hall"], hourly_wage=1000, birth_date="2999-01-01"
+        )
+
+
+def test_calendar_invalid_start_date_rejected():
+    """暦として存在しない開始日は拒否される（従来は解決時に500になっていた）。"""
+    for bad in ("2026-13-01", "2026-02-30"):
+        with pytest.raises(ValidationError):
+            PeriodSchema(start_date=bad, days=7)
+
+
+def test_valid_start_date_accepted():
+    """実在する開始日は受理される（2028年は閏年）。"""
+    assert PeriodSchema(start_date="2028-02-29", days=7).start_date == "2028-02-29"

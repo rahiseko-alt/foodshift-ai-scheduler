@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 from ortools.sat.python import cp_model
 
-from app.engine.constraints import build_optimization_model
+from app.engine.constraints import build_optimization_model, collect_compliance_warnings
 from app.engine.time_utils import calculate_late_night_hours
 from app.schemas.scheduler import (
     AssignedShiftTimeSchema,
@@ -159,6 +159,7 @@ def solve_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeResponse
         return solve_hourly_shift_schedule(request)
 
     start_time = time.time()
+    compliance_warnings = collect_compliance_warnings(request)
     model, work, day_worked, obj_vars, obj_coeffs, under_cover_vars = build_optimization_model(
         request
     )
@@ -185,6 +186,7 @@ def solve_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeResponse
                 max_staff_day_difference=0,
                 unfilled_requirements=[],
                 bottleneck_constraints=bottlenecks,
+                compliance_warnings=compliance_warnings,
             ),
             schedule=[],
         )
@@ -330,6 +332,7 @@ def solve_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeResponse
             max_staff_day_difference=day_diff,
             unfilled_requirements=unfilled_list,
             bottleneck_constraints=bottleneck_constraints,
+            compliance_warnings=compliance_warnings,
         ),
         schedule=schedule_slots,
         assigned_shifts=assigned_shifts_list,

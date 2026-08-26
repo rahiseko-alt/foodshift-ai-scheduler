@@ -67,7 +67,11 @@ test.describe('CUJ-1: Admin Schedule Optimization & Sharing Flow', () => {
     await expect(costSummary).toBeVisible({ timeout: 5000 });
     await expect(costSummary).toContainText('人件費合計');
     await expect(costSummary).toContainText('希望シフト充足率');
-    await expect(costSummary).toContainText('100%遵守');
+    // 法令チェック欄はレスポンスの compliance_warnings を反映する。
+    // 以前は「100%遵守」を無条件にハードコード表示しており、
+    // このアサーション自体が虚偽表示を検証してしまっていた。
+    await expect(costSummary).toContainText('法令チェック');
+    await expect(costSummary).not.toContainText('件の要確認');
 
     // 5. LINE共有テキスト作成
     const copyLineBtn = page.locator('[data-testid="btn-copy-line"]');

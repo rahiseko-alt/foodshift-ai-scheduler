@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 from ortools.sat.python import cp_model
 
-from app.engine.constraints import is_staff_minor
+from app.engine.constraints import collect_compliance_warnings, is_staff_minor
 from app.engine.helpers import add_consecutive_days_constraint
 from app.schemas.scheduler import (
     AssignedShiftTimeSchema,
@@ -24,6 +24,7 @@ def solve_hourly_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeR
     start_time = time.time()
     model = cp_model.CpModel()
 
+    compliance_warnings = collect_compliance_warnings(request)
     num_staff = len(request.staff_members)
     num_days = request.period.days
     start_date_obj = datetime.strptime(request.period.start_date, "%Y-%m-%d")
@@ -219,6 +220,7 @@ def solve_hourly_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeR
                 max_staff_day_difference=0,
                 unfilled_requirements=[],
                 bottleneck_constraints=["制約の競合により実行可能解が見つかりませんでした。"],
+                compliance_warnings=compliance_warnings,
             ),
             schedule=[],
             assigned_shifts=[],
@@ -335,6 +337,7 @@ def solve_hourly_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeR
         max_staff_day_difference=max_diff,
         unfilled_requirements=unfilled_requirements,
         bottleneck_constraints=[],
+        compliance_warnings=compliance_warnings,
     )
 
     return ShiftOptimizeResponse(

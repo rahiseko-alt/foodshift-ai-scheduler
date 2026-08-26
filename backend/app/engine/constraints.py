@@ -14,24 +14,50 @@ from app.schemas.scheduler import (
 )
 
 
-def is_staff_minor(staff: StaffMemberSchema, start_date_str: str) -> bool:
-    """スタッフが満18歳未満（年少者）であるかを判定する（is_minorフラグまたは生年月日から算出）。"""
+def resolve_minor_status(staff: StaffMemberSchema, start_date_str: str) -> tuple[bool, str | None]:
+    """年少者（満18歳未満）判定と、安全側フォールバック時の警告文を返す。
+
+    Invariant 1（年少者の深夜業は例外なく0）は絶対条件であるため、
+    生年月日が解釈できない場合は **年少者として扱う（fail-closed）**。
+    黙って成人扱いにすると、入力ミス1つで16歳が深夜シフトに割り当てられる。
+
+    戻り値: (年少者か, 警告文またはNone)
+    """
     if staff.is_minor:
-        return True
+        return True, None
     if staff.birth_date:
         try:
             start_dt = datetime.strptime(start_date_str, "%Y-%m-%d")
             birth_dt = datetime.strptime(staff.birth_date, "%Y-%m-%d")
-            age = (
-                start_dt.year
-                - birth_dt.year
-                - ((start_dt.month, start_dt.day) < (birth_dt.month, birth_dt.day))
+        except ValueError:
+            return True, (
+                f"スタッフ「{staff.name}」(ID: {staff.id}) の生年月日 "
+                f"'{staff.birth_date}' を日付として解釈できませんでした。"
+                "安全側に倒し年少者として扱います（深夜業禁止）。生年月日を修正してください。"
             )
-            if age < 18:
-                return True
-        except Exception:
-            pass
-    return False
+        age = (
+            start_dt.year
+            - birth_dt.year
+            - ((start_dt.month, start_dt.day) < (birth_dt.month, birth_dt.day))
+        )
+        if age < 18:
+            return True, None
+    return False, None
+
+
+def is_staff_minor(staff: StaffMemberSchema, start_date_str: str) -> bool:
+    """スタッフが満18歳未満（年少者）であるかを判定する（is_minorフラグまたは生年月日から算出）。"""
+    return resolve_minor_status(staff, start_date_str)[0]
+
+
+def collect_compliance_warnings(request: ShiftOptimizeRequest) -> list[str]:
+    """法令判定における安全側フォールバックの発生を警告として収集する。"""
+    warnings: list[str] = []
+    for staff in request.staff_members:
+        _, warning = resolve_minor_status(staff, request.period.start_date)
+        if warning:
+            warnings.append(warning)
+    return warnings
 
 
 def build_optimization_model(
