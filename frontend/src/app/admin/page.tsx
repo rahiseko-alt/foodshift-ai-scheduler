@@ -22,6 +22,7 @@ import { LineImportModal } from '@/components/schedule/LineImportModal';
 import { checkTotalRequiredStaff, checkMissingRequiredRoles } from '@/lib/validation';
 import { generateHourlyRequirements, generateHourlyAvailabilities } from '@/lib/mock-data';
 import { StoreSetupPanel } from '@/components/store/StoreSetupPanel';
+import { ShareSubmitLink } from '@/components/store/ShareSubmitLink';
 
 export default function AdminPage() {
   const [requestData, setRequestData] = useState<ShiftOptimizeRequest>(DEMO_IZAKAYA_DATA);
@@ -385,6 +386,10 @@ export default function AdminPage() {
       )}
 
       {/* 経営改善サマリーカード */}
+      <div style={{ marginBottom: '1.5rem' }}>
+        <ShareSubmitLink request={requestData} onNotify={showToast} />
+      </div>
+
       <RoiSummaryCard summary={response?.summary || null} solveTimeMs={response?.solve_time_ms || 0} />
 
       {/* エクスポートボタン (LINE / CSV / JSONバックアップ) */}

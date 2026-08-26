@@ -400,7 +400,7 @@ export default function ShiftsAdminPage() {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button onClick={handleResetToPreset} className="btn btn-secondary btn-sm">
+              <button onClick={handleResetToPreset} className="btn btn-secondary btn-sm" data-testid="btn-reset-preset">
                 ↺ 初期シフト枠に復元
               </button>
             </div>
