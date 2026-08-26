@@ -11,6 +11,7 @@ from app.engine.constraints import (
     is_staff_minor,
 )
 from app.engine.helpers import add_consecutive_days_constraint, add_rolling_window_limit
+from app.engine.time_utils import build_hourly_requirements_from_shifts
 from app.schemas.scheduler import (
     AssignedShiftTimeSchema,
     HourlyScheduleSlotSchema,
@@ -41,19 +42,7 @@ def solve_hourly_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeR
 
     # 従来の固定枠 requirements からの自動変換（hourly_requirements が空の場合）
     if not request.hourly_requirements and request.shifts and request.requirements:
-        shift_map = {s.id: s for s in request.shifts}
-        for req in request.requirements:
-            shift = shift_map.get(req.shift_id)
-            if shift:
-                s_h = int(shift.start.split(":")[0])
-                e_h = int(shift.end.split(":")[0])
-                if e_h <= s_h:
-                    e_h += 24
-                for h in range(s_h, e_h):
-                    norm_h = h % 24
-                    req_map[(req.day_offset, norm_h)] = (
-                        req_map.get((req.day_offset, norm_h), 0) + req.min_staff
-                    )
+        req_map = build_hourly_requirements_from_shifts(request.shifts, request.requirements)
 
     # 希望時間マップ: (staff_id, day_offset) -> StaffHourlyAvailabilitySchema
     hourly_avail_map = {(a.staff_id, a.day_offset): a for a in request.hourly_availabilities}
