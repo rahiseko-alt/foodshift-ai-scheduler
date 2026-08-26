@@ -12,11 +12,16 @@ test.describe('CUJ-7: LINE Submission & Manager Bulk Import Flow (0-Yen Stateles
     await expect(staffSelect).toBeVisible();
     await staffSelect.selectOption({ index: 1 }); // 2番目のスタッフを選択
 
-    // 3. いくつかの枠をタップ（希望入力）
-    const availButtons = page.locator('button:has-text("不可 不可")');
-    if (await availButtons.count() > 0) {
-      await availButtons.first().click(); // 可 可能に切り替え
-    }
+    // 3. Day1 の枠をタップして「希望」にする
+    //
+    // 以前は `if (count > 0)` で囲まれた曖昧なテキスト検索で、
+    // 一致しなければ何もタップせずに素通りしていた。その結果
+    // 希望ゼロのコード（FS2|...|1|）を提出しており、
+    // 「提出して取り込む」という筋書きでありながら中身を一切検証できていなかった。
+    const firstSlot = page.locator('[data-testid^="btn-slot-0-"]').first();
+    await expect(firstSlot).toBeVisible();
+    await firstSlot.click(); // available -> want
+    await expect(firstSlot).toContainText('希望');
 
     // 4. 「シフト希望を提出する」を押下
     const submitBtn = page.locator('[data-testid="btn-submit-availability"]');
@@ -27,13 +32,14 @@ test.describe('CUJ-7: LINE Submission & Manager Bulk Import Flow (0-Yen Stateles
     const banner = page.locator('[data-testid="submit-success-banner"]');
     await expect(banner).toBeVisible();
 
-    const codeContainer = page.locator('text=FS1|');
+    const codeContainer = page.locator('text=FS2|');
     await expect(codeContainer).toBeVisible();
     const fullText = await codeContainer.textContent();
-    expect(fullText).toContain('FS1|');
+    expect(fullText).toContain('FS2|');
 
     // 提出コードを抽出
-    const match = fullText?.match(/FS1\|[a-zA-Z0-9_\-]+\|\d{4}-\d{2}-\d{2}\|[a-zA-Z0-9]+\|[0-9a-fA-F]{4}/);
+    // FS2 は日数フィールドを持つ（送信側と受信側の日数不一致による破損を防ぐため）
+    const match = fullText?.match(/FS2\|[a-zA-Z0-9_\-]+\|\d{4}-\d{2}-\d{2}\|\d+\|[a-zA-Z0-9]+\|[0-9a-fA-F]{4}/);
     expect(match).not.toBeNull();
     const lineCode = match ? match[0] : '';
 
@@ -67,5 +73,25 @@ test.describe('CUJ-7: LINE Submission & Manager Bulk Import Flow (0-Yen Stateles
     const toast = page.locator('[data-testid="admin-toast-banner"]');
     await expect(toast).toBeVisible({ timeout: 5000 });
     await expect(toast).toContainText('LINEから');
+
+    // 13. 取り込んだ希望が「入力した日付のまま」保存されていること
+    //
+    // 従来はスタッフ側が7日分で送信し店長側が14日分として解釈していたため、
+    // Day1〜7 の希望が Day8〜14 にズレて取り込まれ、Day1〜7 は全て「不可」に
+    // なっていた。しかもエラーにならず成功トーストが出るため誰も気づけなかった。
+    // 形式の検証だけでは検出できないので、日付の整合そのものを検証する。
+    const stored = await page.evaluate(() => {
+      const raw = localStorage.getItem('foodshift_req_store_default');
+      return raw ? JSON.parse(raw) : null;
+    });
+    expect(stored).not.toBeNull();
+    const submitted = (stored.availabilities || []).filter(
+      (a: { status: string }) => a.status !== 'unavailable'
+    );
+    expect(submitted.length).toBeGreaterThan(0);
+    // スタッフ画面は直近7日分しか入力できないため、
+    // 取り込み結果が8日目以降に現れたら日付がズレている
+    const maxDay = Math.max(...submitted.map((a: { day_offset: number }) => a.day_offset));
+    expect(maxDay).toBeLessThan(7);
   });
 });

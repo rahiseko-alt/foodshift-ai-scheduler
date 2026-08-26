@@ -10,7 +10,14 @@
 
 import { StaffAvailability, AvailabilityStatus } from './types';
 
-const FORMAT_VERSION = 'FS1';
+// FS2 で日数をコード自身に埋め込むようにした。
+// FS1 は日数を持たず、送信側 (Math.min(7, period.days)) と
+// 受信側 (period.days) が食い違うと希望が日付ごとズレて取り込まれ、
+// しかもエラーにならないという破損があったため。
+const FORMAT_VERSION = 'FS2';
+const LEGACY_FORMAT_VERSION = 'FS1';
+// FS1 の送信側が使っていた日数の上限（後方互換のデコードに必要）
+const LEGACY_MAX_DAYS = 7;
 const BASE62_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 // 3状態マッピング (2bit: 00=unavailable, 01=available, 10=want, 11=reserved)
@@ -113,7 +120,8 @@ export function encodeSubmissionCode(options: EncodeSubmissionOptions): string {
   bitVector = (bitVector << BigInt(1)) | BigInt(1);
 
   const encodedAvail = toBase62(bitVector);
-  const rawPayload = `${FORMAT_VERSION}|${staff_id}|${period_start}|${encodedAvail}`;
+  // 日数をコードに含めることで、受信側が別の日数で解釈することを構造的に防ぐ
+  const rawPayload = `${FORMAT_VERSION}|${staff_id}|${period_start}|${days}|${encodedAvail}`;
   const checksum = calculateChecksum(rawPayload);
 
   return `${rawPayload}|${checksum}`;
@@ -139,32 +147,60 @@ export function decodeSubmissionCode(
   const cleanCode = code.trim();
   const parts = cleanCode.split('|');
 
-  if (parts.length !== 5) {
-    return {
-      version: '',
-      staff_id: '',
-      period_start: '',
-      availabilities: [],
-      isValid: false,
-      error: `フォーマットが不正です（期待: 5要素, 実際: ${parts.length}要素）`,
-    };
-  }
+  const version = parts[0];
+  const isLegacy = version === LEGACY_FORMAT_VERSION;
+  const expectedParts = isLegacy ? 5 : 6;
 
-  const [version, staff_id, period_start, encodedAvail, checksum] = parts;
-
-  if (version !== FORMAT_VERSION) {
+  if (version !== FORMAT_VERSION && !isLegacy) {
     return {
       version,
-      staff_id,
-      period_start,
+      staff_id: '',
+      period_start: '',
       availabilities: [],
       isValid: false,
       error: `非対応のバージョンです: ${version} (期待: ${FORMAT_VERSION})`,
     };
   }
 
+  if (parts.length !== expectedParts) {
+    return {
+      version,
+      staff_id: '',
+      period_start: '',
+      availabilities: [],
+      isValid: false,
+      error: `フォーマットが不正です（期待: ${expectedParts}要素, 実際: ${parts.length}要素）`,
+    };
+  }
+
+  const staff_id = parts[1];
+  const period_start = parts[2];
+  const encodedAvail = isLegacy ? parts[3] : parts[4];
+  const checksum = parts[expectedParts - 1];
+
+  // 日数はコードに埋め込まれた値を最優先で使う。
+  // FS1 は日数を持たないため、当時の送信側と同じ規則で復元する。
+  let effectiveDays: number;
+  if (isLegacy) {
+    effectiveDays = Math.min(LEGACY_MAX_DAYS, days);
+  } else {
+    effectiveDays = Number(parts[3]);
+    if (!Number.isInteger(effectiveDays) || effectiveDays <= 0) {
+      return {
+        version,
+        staff_id,
+        period_start,
+        availabilities: [],
+        isValid: false,
+        error: `提出コードの日数が不正です: ${parts[3]}`,
+      };
+    }
+  }
+
   // チェックサム検証
-  const rawPayload = `${version}|${staff_id}|${period_start}|${encodedAvail}`;
+  const rawPayload = isLegacy
+    ? `${version}|${staff_id}|${period_start}|${encodedAvail}`
+    : `${version}|${staff_id}|${period_start}|${effectiveDays}|${encodedAvail}`;
   const expectedChecksum = calculateChecksum(rawPayload);
   if (checksum.toLowerCase() !== expectedChecksum) {
     return {
@@ -194,7 +230,7 @@ export function decodeSubmissionCode(
     bitVector = bitVector >> BigInt(1);
 
     // 後ろからビットを展開（LIFO）するためスタックに詰める
-    const totalSlots = days * shift_ids.length;
+    const totalSlots = effectiveDays * shift_ids.length;
     const statusList: AvailabilityStatus[] = [];
 
     for (let i = 0; i < totalSlots; i++) {
@@ -254,7 +290,10 @@ export function decodeSubmissionCode(
  * 複数行のテキスト（LINEトークやコピペ）から FS1|... の提出コードを全件抽出
  */
 export function extractSubmissionCodesFromText(text: string): string[] {
-  const regex = /FS1\|[a-zA-Z0-9_\-]+\|\d{4}-\d{2}-\d{2}\|[a-zA-Z0-9]+\|[0-9a-fA-F]{4}/g;
+  // FS2 は日数フィールドを1つ多く持つ。FS1 も引き続き抽出できるようにする
+  // （抽出漏れは「コードが見つかりません」となり原因が分かりにくいため）。
+  const regex =
+    /FS2\|[a-zA-Z0-9_\-]+\|\d{4}-\d{2}-\d{2}\|\d+\|[a-zA-Z0-9]+\|[0-9a-fA-F]{4}|FS1\|[a-zA-Z0-9_\-]+\|\d{4}-\d{2}-\d{2}\|[a-zA-Z0-9]+\|[0-9a-fA-F]{4}/g;
   const matches = text.match(regex);
   return matches ? Array.from(new Set(matches)) : [];
 }

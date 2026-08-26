@@ -90,7 +90,7 @@ test.describe('CUJ-9: 15-Minute Quarter-Hour Shift Creation, Submission & Optimi
     // 提出完了バナー & LINE提出コードが表示されることを確認
     const successBanner = page.locator('[data-testid="submit-success-banner"]');
     await expect(successBanner).toBeVisible({ timeout: 10000 });
-    await expect(successBanner).toContainText('FS1|');
+    await expect(successBanner).toContainText('FS2|');
 
     // 6. 管理画面 (/admin) にアクセスして最適化を実行
     await page.goto('/admin');
