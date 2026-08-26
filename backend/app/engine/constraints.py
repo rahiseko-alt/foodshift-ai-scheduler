@@ -2,7 +2,11 @@ from datetime import datetime
 
 from ortools.sat.python import cp_model
 
-from app.engine.helpers import add_consecutive_days_constraint
+from app.engine.helpers import (
+    WEEK_WINDOW_DAYS,
+    add_consecutive_days_constraint,
+    add_rolling_window_limit,
+)
 from app.engine.time_utils import (
     calculate_interval_minutes,
     calculate_late_night_hours,
@@ -12,6 +16,9 @@ from app.schemas.scheduler import (
     ShiftOptimizeRequest,
     StaffMemberSchema,
 )
+
+# 留学生の資格外活動許可における週間労働時間の上限（出入国在留管理庁）
+FOREIGN_STUDENT_WEEKLY_HOURS_CAP = 28.0
 
 
 def resolve_minor_status(staff: StaffMemberSchema, start_date_str: str) -> tuple[bool, str | None]:
@@ -48,6 +55,71 @@ def resolve_minor_status(staff: StaffMemberSchema, start_date_str: str) -> tuple
 def is_staff_minor(staff: StaffMemberSchema, start_date_str: str) -> bool:
     """スタッフが満18歳未満（年少者）であるかを判定する（is_minorフラグまたは生年月日から算出）。"""
     return resolve_minor_status(staff, start_date_str)[0]
+
+
+def effective_max_weekly_hours(staff: StaffMemberSchema) -> float:
+    """スタッフに実際に適用される週間労働時間の上限（時間）を返す。
+
+    留学生は資格外活動許可の28時間規制と本人設定の厳しい方を採用する。
+    両ソルバーがこの関数を共有することで、28時間規制が片方の
+    ソルバーにだけハードコードされて他方で忘れられる事態を防ぐ。
+    """
+    if staff.is_foreign_student:
+        return min(staff.max_weekly_hours, FOREIGN_STUDENT_WEEKLY_HOURS_CAP)
+    return staff.max_weekly_hours
+
+
+def find_weekly_hours_conflicts(request: ShiftOptimizeRequest) -> list[str]:
+    """週労働時間上限と最小出勤日数が数学的に両立しないスタッフを名指しで列挙する。
+
+    min_days_per_period は緩和変数を持たない Hard 制約のため、
+    週上限と衝突すると人員不足ではなく INFEASIBLE になる。
+    汎用の「制約の競合」だけでは店長が原因を特定できないので、
+    どのスタッフのどの設定が矛盾しているかを具体的に返す。
+    """
+    conflicts: list[str] = []
+    num_days = request.period.days
+    if request.shifts:
+        shortest_hours = min(s.hours - s.break_minutes / 60.0 for s in request.shifts)
+    else:
+        shortest_hours = float(request.min_shift_hours)
+    if shortest_hours <= 0:
+        return conflicts
+
+    for staff in request.staff_members:
+        if staff.min_days_per_period <= 0:
+            continue
+        required_days = min(staff.min_days_per_period, num_days)
+        # 最小出勤日数を満たすのに必要な時間は、7日窓に均した値で比較する
+        days_in_window = min(required_days, WEEK_WINDOW_DAYS)
+        required_hours = days_in_window * shortest_hours
+        cap = effective_max_weekly_hours(staff)
+        if required_hours > cap:
+            conflicts.append(
+                f"スタッフ「{staff.name}」(ID: {staff.id}) は最小出勤日数 "
+                f"{staff.min_days_per_period}日 × 最短シフト {shortest_hours:.2f}時間 = "
+                f"{required_hours:.2f}時間/週 が必要ですが、週間労働時間上限は {cap:.2f}時間です。"
+                "どちらかの設定を緩めてください。"
+            )
+    return conflicts
+
+
+def describe_no_solution(request: ShiftOptimizeRequest, solve_status: int) -> list[str]:
+    """解が得られなかった理由を、制限時間切れと制約競合とで区別して説明する。
+
+    CP-SAT の UNKNOWN（制限時間内に解を発見できず）を
+    INFEASIBLE（制約が数学的に矛盾）と同じ文言で返すと、
+    実際には規模の問題なのに「設定が矛盾している」と誤解させてしまう。
+    """
+    if solve_status == cp_model.UNKNOWN:
+        return [
+            "制限時間内に解を発見できませんでした（制約が矛盾しているとは限りません）。"
+            "対象期間の日数やスタッフ数を減らして再実行してください。"
+        ]
+    conflicts = find_weekly_hours_conflicts(request)
+    if conflicts:
+        return conflicts
+    return ["制約の競合により実行可能解が見つかりませんでした。"]
 
 
 def collect_compliance_warnings(request: ShiftOptimizeRequest) -> list[str]:
@@ -199,21 +271,17 @@ def build_optimization_model(
         shift_net_minutes.append(net_m)
 
     for e_idx, staff in enumerate(request.staff_members):
-        effective_max_hours = (
-            min(staff.max_weekly_hours, 28.0)
-            if staff.is_foreign_student
-            else staff.max_weekly_hours
-        )
-        max_minutes = int(round(effective_max_hours * 60))
-        # 7日ごとのブロック制約
-        for start_d in range(0, max(1, num_days - 6), 7):
-            window_days = range(start_d, min(num_days, start_d + 7))
-            minutes_expr = sum(
-                shift_net_minutes[s] * work[e_idx, s, d]
-                for s in range(num_shifts)
-                for d in window_days
-            )
-            model.Add(minutes_expr <= max_minutes)
+        max_minutes = int(round(effective_max_weekly_hours(staff) * 60))
+        # 任意の連続7日窓に対して上限を張る。
+        # 旧実装 range(0, max(1, num_days - 6), 7) は非重複ブロックだったため、
+        # (a) 境界を跨ぐ連続7日が無制限、
+        # (b) num_days=31 では day28-30 が、num_days=10 では day7-9 が
+        #     どの窓にも入らず完全に無制約、という2つの穴があった。
+        daily_minutes = [
+            sum(shift_net_minutes[s] * work[e_idx, s, d] for s in range(num_shifts))
+            for d in range(num_days)
+        ]
+        add_rolling_window_limit(model, daily_minutes, max_minutes)
 
     # 10. 必要人数制約 (スラック変数による緩和付き)
     req_map: dict[tuple[int, int], int] = {}

@@ -4,7 +4,11 @@ from datetime import datetime, timedelta
 
 from ortools.sat.python import cp_model
 
-from app.engine.constraints import build_optimization_model, collect_compliance_warnings
+from app.engine.constraints import (
+    build_optimization_model,
+    collect_compliance_warnings,
+    describe_no_solution,
+)
 from app.engine.time_utils import calculate_late_night_hours
 from app.schemas.scheduler import (
     AssignedShiftTimeSchema,
@@ -173,7 +177,10 @@ def solve_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeResponse
     elapsed_ms = int((time.time() - start_time) * 1000)
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        bottlenecks = _analyze_infeasible_bottlenecks(request)
+        # 制限時間切れ／週上限と最小出勤日数の競合を、汎用の分析より優先して説明する
+        bottlenecks = describe_no_solution(request, status)
+        if bottlenecks == ["制約の競合により実行可能解が見つかりませんでした。"]:
+            bottlenecks = _analyze_infeasible_bottlenecks(request)
         return ShiftOptimizeResponse(
             status="INFEASIBLE",
             solve_time_ms=elapsed_ms,

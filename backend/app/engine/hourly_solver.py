@@ -4,8 +4,13 @@ from datetime import datetime, timedelta
 
 from ortools.sat.python import cp_model
 
-from app.engine.constraints import collect_compliance_warnings, is_staff_minor
-from app.engine.helpers import add_consecutive_days_constraint
+from app.engine.constraints import (
+    collect_compliance_warnings,
+    describe_no_solution,
+    effective_max_weekly_hours,
+    is_staff_minor,
+)
+from app.engine.helpers import add_consecutive_days_constraint, add_rolling_window_limit
 from app.schemas.scheduler import (
     AssignedShiftTimeSchema,
     HourlyScheduleSlotSchema,
@@ -102,13 +107,23 @@ def solve_hourly_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeR
                     if h >= 22 or h < 5:
                         model.Add(work[e, d, h] == 0)
 
-    # 4. Hard制約: 留学生 週間28時間制限
+    # 4. Hard制約: 週間最大労働時間（全スタッフ／任意の連続7日窓）
+    #
+    # 従来は留学生の28時間制限のみを、しかも非重複ブロックで張っていた。
+    # 一般スタッフの max_weekly_hours はこのソルバーで一切参照されておらず、
+    # 管理画面からの最適化は全てこのソルバーに到達するため、
+    # 36協定・契約上の週上限が本番経路で丸ごと無効になっていた。
+    #
+    # 単位について（意図的な選択）:
+    # このソルバーは休憩をモデル変数として持たない（解の事後に控除している）ため、
+    # sum(work[e, d, h]) は実労働時間ではなく拘束時間である。
+    # これを max_weekly_hours に対して掛けるのは法定より厳しい側であり、
+    # 上限としては安全側。正確な実労働時間での上限は休憩のモデル内制約化
+    # （15分グリッド化が前提）が必要なため、別途対応する。
     for e, staff in enumerate(request.staff_members):
-        if staff.is_foreign_student:
-            for start_d in range(0, num_days, 7):
-                end_d = min(start_d + 7, num_days)
-                week_work = sum(work[e, d, h] for d in range(start_d, end_d) for h in range(24))
-                model.Add(week_work <= 28)
+        daily_hours = [sum(work[e, d, h] for h in range(24)) for d in range(num_days)]
+        max_hours = int(effective_max_weekly_hours(staff))
+        add_rolling_window_limit(model, daily_hours, max_hours)
 
     # 5. Hard制約: スタッフの時間帯希望（希望時間外の割当禁止）
     for e, staff in enumerate(request.staff_members):
@@ -219,7 +234,7 @@ def solve_hourly_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeR
                 wants_fulfillment_rate=0.0,
                 max_staff_day_difference=0,
                 unfilled_requirements=[],
-                bottleneck_constraints=["制約の競合により実行可能解が見つかりませんでした。"],
+                bottleneck_constraints=describe_no_solution(request, solve_status),
                 compliance_warnings=compliance_warnings,
             ),
             schedule=[],

@@ -79,16 +79,46 @@ def build_request(
     )
 
 
-def assigned_staff_ids(response, mode: str) -> set[str]:
-    """レスポンスから割当済みスタッフIDを、経路差を吸収して抽出する。"""
+def _hour_range(start_time: str, end_time: str) -> set[int]:
+    """'HH:MM'-'HH:MM' が占める時刻の集合を返す（日跨ぎは24で正規化）。"""
+    start_h = int(start_time.split(":")[0])
+    end_min = int(end_time.split(":")[0]) * 60 + int(end_time.split(":")[1])
+    start_min = start_h * 60 + int(start_time.split(":")[1])
+    if end_min <= start_min:
+        end_min += 24 * 60
+    end_h = -(-end_min // 60)  # 天井除算
+    return {h % 24 for h in range(start_h, end_h)}
+
+
+def night_assigned_staff_ids(response) -> set[str]:
+    """深夜帯(22:00〜05:00)に実際に勤務が割り当てられたスタッフIDを返す。
+
+    「そのスタッフが登場するか」ではなく「深夜時間に入っているか」で判定する。
+    CP-SAT は `relative_gap_limit=0.05` の範囲で最適解を打ち切るため、
+    人員不足ペナルティ(10000/時)に対して微小なコストの無意味な割当が
+    解に残ることがある。単なる登場有無で判定すると、
+    深夜業とは無関係な割当を拾ってテストがフレーキーになる。
+    """
     ids: set[str] = set()
-    for slot in response.schedule:
-        for member in slot.assigned_staff:
-            ids.add(member.id)
+    for slot in response.hourly_schedule:
+        if slot.hour >= 22 or slot.hour < 5:
+            ids.update(slot.assigned_staff_ids)
+    for shift in response.assigned_shifts:
+        if any(h >= 22 or h < 5 for h in _hour_range(shift.start_time, shift.end_time)):
+            ids.add(shift.staff_id)
+    return ids
+
+
+def all_assigned_staff_ids(response) -> set[str]:
+    """時間帯を問わず、何らかの割当があるスタッフIDを返す（対照群の判定用）。"""
+    ids: set[str] = set()
     for slot in response.hourly_schedule:
         ids.update(slot.assigned_staff_ids)
     for shift in response.assigned_shifts:
         ids.add(shift.staff_id)
+    for slot in response.schedule:
+        for member in slot.assigned_staff:
+            ids.add(member.id)
     return ids
 
 
@@ -113,14 +143,14 @@ def make_staff(**overrides) -> StaffMemberSchema:
 def test_minor_flag_never_assigned_to_night_slot(mode: str) -> None:
     """is_minor=True のスタッフは深夜帯に一切割り当てられない。"""
     res = solve_shift_schedule(build_request([make_staff(is_minor=True)], mode))
-    assert "target" not in assigned_staff_ids(res, mode)
+    assert "target" not in night_assigned_staff_ids(res)
 
 
 @pytest.mark.parametrize("mode", SOLVER_MODES)
 def test_maternity_protection_never_assigned_to_night_slot(mode: str) -> None:
     """母性保護対象のスタッフは深夜帯に一切割り当てられない。"""
     res = solve_shift_schedule(build_request([make_staff(is_maternity_protection=True)], mode))
-    assert "target" not in assigned_staff_ids(res, mode)
+    assert "target" not in night_assigned_staff_ids(res)
 
 
 @pytest.mark.parametrize("mode", SOLVER_MODES)
@@ -129,7 +159,7 @@ def test_birth_date_derived_minor_never_assigned_to_night_slot(mode: str) -> Non
     res = solve_shift_schedule(
         build_request([make_staff(is_minor=False, birth_date="2010-01-15")], mode)
     )
-    assert "target" not in assigned_staff_ids(res, mode)
+    assert "target" not in night_assigned_staff_ids(res)
 
 
 @pytest.mark.parametrize("mode", SOLVER_MODES)
@@ -147,7 +177,7 @@ def test_uninterpretable_birth_date_fails_closed(mode: str, bad_birth_date: str)
 
     res = solve_shift_schedule(request)
 
-    assert "target" not in assigned_staff_ids(res, mode)
+    assert "target" not in night_assigned_staff_ids(res)
     assert res.summary.compliance_warnings, "安全側フォールバック時は警告を必ず返すこと"
     assert bad_birth_date in res.summary.compliance_warnings[0]
     assert "target" in res.summary.compliance_warnings[0], "警告はスタッフIDを名指しすること"
@@ -179,7 +209,7 @@ def test_legacy_pregnancy_field_name_still_blocks_night_work(mode: str) -> None:
     assert staff.is_maternity_protection is True, "旧名が正式フィールドに写像されること"
 
     res = solve_shift_schedule(build_request([staff], mode))
-    assert "target" not in assigned_staff_ids(res, mode)
+    assert "target" not in night_assigned_staff_ids(res)
 
 
 def test_legacy_student_visa_field_name_is_mapped() -> None:
@@ -222,7 +252,7 @@ def test_adult_is_assignable_to_night_slot(mode: str) -> None:
     res = solve_shift_schedule(
         build_request([make_staff(is_minor=False, birth_date="1990-05-05")], mode)
     )
-    assert "target" in assigned_staff_ids(res, mode)
+    assert "target" in night_assigned_staff_ids(res)
 
 
 @pytest.mark.parametrize("mode", SOLVER_MODES)
