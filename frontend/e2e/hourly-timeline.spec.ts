@@ -3,7 +3,9 @@ import { test, expect } from '@playwright/test';
 test.describe('CUJ-11: 1-Hour Time-Slot Shift & Dual-View (Daily Timeline & Monthly Matrix)', () => {
   test('should optimize with hourly time-slots, render 15-minute dotted grid, top-required/bottom-actual split, 15-min resize handles and Home button', async ({
     page,
+    context,
   }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     // 1. API モックレスポンスを設定 (15分刻みシフト)
     await page.route('**/api/v1/optimize', async (route) => {
       await route.fulfill({
@@ -121,5 +123,20 @@ test.describe('CUJ-11: 1-Hour Time-Slot Shift & Dual-View (Daily Timeline & Mont
     const timelineTab = page.locator('[data-testid="tab-view-timeline"]');
     await timelineTab.click();
     await expect(page.locator('[data-testid="daily-timeline-view"]')).toBeVisible();
+
+    // 7. LINE共有テキストに実際のシフト行が含まれること (UAC-4)
+    //
+    // 1時間スロット経路のレスポンスは schedule が常に空で、割当は
+    // assigned_shifts に入る。ExportModal が schedule だけを走査していたため、
+    // 店長が配布するLINE本文にシフト行が1行も出ないまま
+    // 「人件費」と「希望充足率」だけが載る状態だった。
+    const copyLineBtn = page.locator('[data-testid="btn-copy-line"]');
+    await expect(copyLineBtn).toBeVisible();
+    await copyLineBtn.click();
+
+    const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clipboardText).toContain('【FoodShift 確定シフト】');
+    expect(clipboardText).toContain('佐藤 店長 (社員)');
+    expect(clipboardText).toContain('10:15-15:45');
   });
 });

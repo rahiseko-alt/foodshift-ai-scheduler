@@ -50,9 +50,14 @@ export const ExportModal: React.FC<Props> = ({ request, response, onRestore }) =
     lines.push(`【FoodShift 確定シフト】`);
     lines.push(`期間: ${request.period.start_date} から ${request.period.days}日間\n`);
 
+    // 1時間スロット経路（管理画面からの最適化は常にこちら）では
+    // response.schedule は常に空で、割当は assigned_shifts に入る。
+    // schedule だけを走査していたため、配布用テキストにシフト行が
+    // 1行も出力されないまま「人件費」と「希望充足率」だけが載っていた。
     for (let d = 0; d < request.period.days; d++) {
       const daySlots = response.schedule.filter((s) => s.day_offset === d);
-      const dateStr = daySlots[0]?.date || `Day ${d + 1}`;
+      const dayShifts = (response.assigned_shifts ?? []).filter((s) => s.day_offset === d);
+      const dateStr = daySlots[0]?.date || dayShifts[0]?.date || `Day ${d + 1}`;
       lines.push(`${dateStr}`);
 
       for (const slot of daySlots) {
@@ -61,6 +66,14 @@ export const ExportModal: React.FC<Props> = ({ request, response, onRestore }) =
         const timeRange = shiftObj ? `${shiftObj.start}-${shiftObj.end}` : '';
         const names = slot.assigned_staff.map((s) => s.name).join(', ');
         lines.push(`  ・${shiftName} (${timeRange}): ${names || '割当なし'}`);
+      }
+
+      for (const shift of dayShifts) {
+        lines.push(`  ・${shift.start_time}-${shift.end_time}: ${shift.name || shift.staff_id}`);
+      }
+
+      if (daySlots.length === 0 && dayShifts.length === 0) {
+        lines.push('  ・割当なし');
       }
       lines.push('');
     }

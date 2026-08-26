@@ -253,6 +253,16 @@ def solve_hourly_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeR
     total_break_hours = 0.0
     staff_days_count = [0] * num_staff
 
+    # 希望充足率の分母。
+    # is_available=False の日は day_worked==0 が強制される（構造的に充足不能）ため
+    # 分母から除外する。含めると充足率が恒久的に下がってしまう。
+    total_wants = sum(
+        1
+        for a in request.hourly_availabilities
+        if a.is_preferred and a.is_available and a.day_offset < num_days
+    )
+    fulfilled_wants = 0
+
     for d in range(num_days):
         current_date_str = (start_date_obj + timedelta(days=d)).strftime("%Y-%m-%d")
 
@@ -295,6 +305,9 @@ def solve_hourly_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeR
             staff = request.staff_members[e]
             if solver.Value(day_worked[e, d]) == 1:
                 staff_days_count[e] += 1
+                avail_pref = hourly_avail_map.get((staff.id, d))
+                if avail_pref and avail_pref.is_preferred and avail_pref.is_available:
+                    fulfilled_wants += 1
                 hours_worked = [h for h in range(24) if solver.Value(work[e, d, h]) == 1]
                 if hours_worked:
                     start_h_val = min(hours_worked)
@@ -341,6 +354,8 @@ def solve_hourly_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeR
                     )
 
     max_diff = max(staff_days_count) - min(staff_days_count) if staff_days_count else 0
+    # solver.py:298 と同じ意味論に揃える（希望が0件なら1.0）
+    wants_rate = (fulfilled_wants / total_wants) if total_wants > 0 else 1.0
     status_str = "FEASIBLE_WITH_SHORTAGE" if unfilled_requirements else "OPTIMAL"
 
     summary = ScheduleSummarySchema(
@@ -348,7 +363,10 @@ def solve_hourly_shift_schedule(request: ShiftOptimizeRequest) -> ShiftOptimizeR
         total_work_hours=round(total_work_hours, 2),
         total_break_hours=round(total_break_hours, 2),
         deep_night_extra_cost=total_deep_night_extra,
-        wants_fulfillment_rate=1.0 if not unfilled_requirements else 0.85,
+        # 従来は `1.0 if not unfilled_requirements else 0.85` という決め打ちで、
+        # 希望充足率を一切計算していなかった（人員不足の有無という別概念の関数）。
+        # この値は管理者のKPIカードと、スタッフへ配布するLINE本文に表示される。
+        wants_fulfillment_rate=round(wants_rate, 2),
         max_staff_day_difference=max_diff,
         unfilled_requirements=unfilled_requirements,
         bottleneck_constraints=[],
