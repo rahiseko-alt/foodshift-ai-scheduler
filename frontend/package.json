@@ -16,7 +16,7 @@
     "@schedule-x/calendar": "^2.1.0",
     "@schedule-x/react": "^2.1.0",
     "@schedule-x/theme-default": "^2.1.0",
-    "@schedule-x/events-service": "^2.1.0"
+    "@schedule-x/events-service": "^4.6.1"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
