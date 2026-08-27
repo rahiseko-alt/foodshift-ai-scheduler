@@ -131,8 +131,19 @@ def test_15_staff_14_days_optimal_and_quality():
     # 3. 人件費、総労働時間、休憩時間、深夜割増の正当性
     assert res.summary.total_labor_cost > 0
     assert res.summary.total_work_hours > 0
-    assert res.summary.total_break_hours >= 0
     assert res.summary.deep_night_extra_cost > 0
+
+    # `total_break_hours >= 0` は休憩時間が負にならない以上**恒真**であり、
+    # 集計を丸ごと 0 にしても、休憩控除を消しても検出できなかった。
+    # レスポンス自身の割当から数え直した値との一致を要求する（自己整合オラクル）。
+    expected_break_hours = round(sum(s.break_minutes for s in res.assigned_shifts) / 60.0, 2)
+    assert res.summary.total_break_hours == expected_break_hours
+    # ディナー枠は休憩30分なので、割当がある限り必ず正になる
+    assert res.summary.total_break_hours > 0, "休憩時間が1件も集計されていない"
+
+    # 実労働時間も同様に自己整合を要求する（net/gross 取り違えの検出）
+    expected_work_hours = round(sum(s.hours for s in res.assigned_shifts), 2)
+    assert res.summary.total_work_hours == expected_work_hours
 
     # 4. 年少者深夜禁止 (労基法第60条) の完全厳守
     minor_ids = {"emp_13", "emp_14"}
@@ -315,3 +326,97 @@ def test_infeasible_schedule_returns_bottleneck_analysis():
     res = solve_shift_schedule(request)
     assert res.status == "INFEASIBLE"
     assert len(res.summary.bottleneck_constraints) >= 1
+
+
+def test_wants_fulfillment_rate_is_one_when_no_preferences_shift_solver():
+    """シフト枠ソルバーでも希望0件なら充足率は 1.0（ゼロ除算せず 0.0 にもしない）。
+
+    hourly 側には同等のテストがあったが、シフト枠ソルバー側の
+    `else 1.0` 分岐は誰も見張っておらず、0.0 に変えても全テストが緑だった。
+    0.0 を返すと管理画面のKPIカードに「希望充足率 0%」と表示される。
+    """
+    request = ShiftOptimizeRequest(
+        period=PeriodSchema(start_date="2026-09-01", days=1),
+        shifts=[
+            ShiftSchema(
+                id="s1",
+                name="日勤",
+                start="09:00",
+                end="14:00",
+                hours=5.0,
+                break_minutes=0,
+                is_late_night=False,
+            ),
+        ],
+        staff_members=[
+            StaffMemberSchema(id="e1", name="スタッフ1", roles=["hall"], hourly_wage=1000),
+        ],
+        requirements=[ShiftRequirementSchema(day_offset=0, shift_id="s1", min_staff=1)],
+        availabilities=[],  # 希望なし
+    )
+
+    res = solve_shift_schedule(request)
+
+    assert res.status == "OPTIMAL"
+    # 対照群: 割当が実際にある状態での 1.0 であること
+    assert len(res.assigned_shifts) == 1
+    assert res.summary.wants_fulfillment_rate == 1.0
+
+
+def test_max_staff_day_difference_reflects_the_actual_spread():
+    """出勤日数の偏り (max_staff_day_difference) が実際の割当と一致する。
+
+    この指標は「シフトが特定の人に偏っていないか」を店長が見るための値だが、
+    0 固定に変えても全テストが緑のままだった（誰も見ていなかった）。
+    レスポンス自身の割当から数え直した値との一致を要求する。
+    """
+    request = ShiftOptimizeRequest(
+        period=PeriodSchema(start_date="2026-09-01", days=4),
+        shifts=[
+            ShiftSchema(
+                id="s1",
+                name="日勤",
+                start="09:00",
+                end="14:00",
+                hours=5.0,
+                break_minutes=0,
+                is_late_night=False,
+            ),
+        ],
+        staff_members=[
+            # busy は全日入れる / rare は1日しか入れない -> 偏りが必ず生じる
+            StaffMemberSchema(
+                id="busy",
+                name="よく入る人",
+                roles=["hall"],
+                hourly_wage=1000,
+                max_consecutive_days=7,
+            ),
+            StaffMemberSchema(
+                id="rare",
+                name="たまに入る人",
+                roles=["hall"],
+                hourly_wage=1000,
+                max_consecutive_days=7,
+                min_days_per_period=1,
+                max_days_per_period=1,
+            ),
+        ],
+        requirements=[
+            ShiftRequirementSchema(day_offset=d, shift_id="s1", min_staff=1) for d in range(4)
+        ],
+        availabilities=[],
+    )
+
+    res = solve_shift_schedule(request)
+    assert res.status == "OPTIMAL"
+
+    counts = {
+        sid: sum(1 for s in res.assigned_shifts if s.staff_id == sid) for sid in ("busy", "rare")
+    }
+    assert counts["rare"] == 1, f"出勤日数1日の制約が効いていない: {counts}"
+    assert counts["busy"] == 3, f"残りを busy が埋めていない: {counts}"
+
+    expected_diff = max(counts.values()) - min(counts.values())
+    assert expected_diff > 0, "偏りが生じない条件になっている（テストが空振り）"
+    assert res.summary.max_staff_day_difference == expected_diff

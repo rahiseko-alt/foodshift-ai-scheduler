@@ -296,9 +296,13 @@ export default function ForecastAdminPage() {
       </div>
 
       {/* 2カラムレイアウト: 左側 パラメータ設定, 右側 グラフ & シフト枠プレビュー */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 380px) 1fr', gap: '1.5rem', alignItems: 'start' }}>
+      {/* PCでは「設定 380px ＋ 残り全部」の2カラム、スマホ(375px)では
+          折り返して縦積みになるレイアウト。固定2カラムのままだと
+          375px 端末で本文が画面外（実測 1249px 幅）へはみ出し、
+          店長がスマホから予測を確認できなかった。 */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'flex-start' }}>
         {/* 左側: 設定・シミュレータパネル */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', flex: '1 1 320px', maxWidth: '380px', minWidth: 0 }}>
           {/* 業態選択 */}
           <div className="card" style={{ padding: '1.25rem' }}>
             <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: '0 0 1rem 0' }}>
@@ -566,14 +570,17 @@ export default function ForecastAdminPage() {
         </div>
 
         {/* 右側: 日別カード & 24時間詳細グラフ & シフト枠連携プレビュー */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', flex: '3 1 420px', minWidth: 0 }}>
           {/* 日別タブセレクター */}
           <div className="card" style={{ padding: '1rem' }}>
             <div style={{ fontSize: '0.8125rem', fontWeight: 700, marginBottom: '0.75rem' }}>
               日別予測一覧（クリックして時間帯詳細を表示）
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${forecastResult.daily_forecasts.length}, 1fr)`, gap: '0.5rem' }}>
+            {/* 日数分の列は狭い画面に収まらないため、
+                ページ全体を押し広げるのではなくこの一覧の中だけを横スクロールさせる */}
+            <div style={{ overflowX: 'auto' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${forecastResult.daily_forecasts.length}, minmax(54px, 1fr))`, gap: '0.5rem', minWidth: 'max-content' }}>
               {forecastResult.daily_forecasts.map((daily, idx) => {
                 const isSelected = selectedDayIndex === idx;
                 const isWeekend = daily.day_of_week === 0 || daily.day_of_week === 6;
@@ -622,6 +629,7 @@ export default function ForecastAdminPage() {
                   </button>
                 );
               })}
+            </div>
             </div>
           </div>
 
@@ -685,10 +693,12 @@ export default function ForecastAdminPage() {
                           style={{ transition: 'height 0.2s ease, y 0.2s ease' }}
                         >
                           <title>
-                            {h.hour}:00
-                            {'\n'}予測売上: ¥{h.predicted_sales.toLocaleString()}
-                            {'\n'}客数: {h.predicted_customers}名 (予約: {h.reserved_customers}名)
-                            {'\n'}推奨人数: {h.recommended_staff}名 (固定: {h.fixed_staff}名 / 変動: {h.variable_staff}名)
+                            {[
+                              `${h.hour}:00`,
+                              `予測売上: ¥${h.predicted_sales.toLocaleString()}`,
+                              `客数: ${h.predicted_customers}名 (予約: ${h.reserved_customers}名)`,
+                              `推奨人数: ${h.recommended_staff}名 (固定: ${h.fixed_staff}名 / 変動: ${h.variable_staff}名)`,
+                            ].join('\n')}
                           </title>
                         </rect>
                         {/* 時刻ラベル */}

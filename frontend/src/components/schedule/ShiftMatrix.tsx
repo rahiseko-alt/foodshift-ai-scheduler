@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import {
   AssignedStaff,
   ScheduledShiftSlot,
+  Shift,
   ShiftOptimizeRequest,
   ShiftOptimizeResponse,
   StaffMember,
@@ -24,6 +25,55 @@ interface CellClickState {
   dayOffset: number;
   shiftId: string;
   slotDate: string;
+}
+
+/**
+ * 不足枠のIDから、代打依頼に使うシフト枠を決める。
+ *
+ * 1時間スロット経路の不足枠IDは `hour_22` のような形式で、
+ * シフト枠のIDとは一致しない。従来は `|| shifts[0]` で先頭枠
+ * （仕込み・ランチ 10:00〜15:00）にフォールバックしていたため、
+ * **22時台の穴埋め依頼が「10:00〜15:00 で出勤お願いします」になり、
+ * 深夜判定も false になって年少者が深夜の代打候補に出得た**
+ * （労基法第60条のリスク）。
+ * 時刻から該当する枠を引き当て、無ければその時間帯を表す仮の枠を作る。
+ */
+export function resolveShiftForSlot(shifts: Shift[], slotId: string): Shift {
+  const exact = shifts.find((s) => s.id === slotId);
+  if (exact) return exact;
+
+  const hourMatch = slotId.match(/^hour_(\d{1,2})$/);
+  if (hourMatch) {
+    const hour = Number(hourMatch[1]);
+    const toMin = (t: string) => {
+      const [h, m] = t.split(':').map(Number);
+      return h * 60 + (m || 0);
+    };
+    // その時刻を含む枠があればそれを使う
+    const covering = shifts.find((s) => {
+      const st = toMin(s.start);
+      let en = toMin(s.end);
+      if (en <= st) en += 24 * 60;
+      const target = hour * 60;
+      return (target >= st && target < en) || (target + 1440 >= st && target + 1440 < en);
+    });
+    if (covering) return covering;
+
+    // 該当する枠が無い場合は、その1時間だけの仮枠を作る。
+    // shifts[0] に落とすと深夜帯の不足が昼の依頼文になってしまう。
+    const hh = String(hour).padStart(2, '0');
+    const nh = String((hour + 1) % 24).padStart(2, '0');
+    return {
+      id: slotId,
+      name: `${hh}:00〜${nh}:00`,
+      start: `${hh}:00`,
+      end: `${nh}:00`,
+      hours: 1,
+      is_late_night: hour >= 22 || hour < 5,
+    };
+  }
+
+  return shifts[0];
 }
 
 export const ShiftMatrix: React.FC<Props> = ({ request, response, onResponseChange, showToast }) => {
@@ -590,7 +640,7 @@ export const ShiftMatrix: React.FC<Props> = ({ request, response, onResponseChan
           isOpen={true}
           onClose={() => setNegotiationCell(null)}
           day_offset={negotiationCell.dayOffset}
-          shift={shifts.find((s) => s.id === negotiationCell.shiftId) || shifts[0]}
+          shift={resolveShiftForSlot(shifts, negotiationCell.shiftId)}
           shifts={shifts}
           dateFormatted={negotiationCell.slotDate}
           staff_members={staffList}

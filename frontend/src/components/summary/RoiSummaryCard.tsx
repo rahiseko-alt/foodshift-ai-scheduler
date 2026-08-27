@@ -12,9 +12,33 @@ export const RoiSummaryCard: React.FC<Props> = ({ summary, solveTimeMs }) => {
   if (!summary) return null;
 
   const hasShortage = summary.unfilled_requirements.length > 0;
+  const complianceWarnings = summary.compliance_warnings ?? [];
 
   return (
     <div data-testid="roi-summary-card" style={{ marginBottom: '1.5rem' }}>
+      {complianceWarnings.length > 0 && (
+        <div
+          data-testid="compliance-warning"
+          style={{
+            backgroundColor: 'var(--warning-bg)',
+            color: 'var(--warning)',
+            border: '1px solid var(--warning-border)',
+            borderRadius: 'var(--radius-sm)',
+            padding: '0.875rem 1.25rem',
+            marginBottom: '1rem',
+            fontWeight: 600,
+          }}
+        >
+          <div style={{ marginBottom: '0.25rem' }}>
+            法令判定で安全側のフォールバックが作動しました（{complianceWarnings.length}件）
+          </div>
+          <ul style={{ margin: 0, paddingLeft: '1.25rem', fontWeight: 400, fontSize: '0.8rem' }}>
+            {complianceWarnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {hasShortage && (
         <div
           data-testid="shortage-alert"
@@ -90,13 +114,27 @@ export const RoiSummaryCard: React.FC<Props> = ({ summary, solveTimeMs }) => {
         </div>
 
         <div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>労基法違反</div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--success)' }}>
-            0 <span style={{ fontSize: '0.875rem' }}>件 (100%遵守)</span>
-          </div>
-          <div style={{ fontSize: '0.7rem', color: 'var(--success)' }}>
-            年少者22時以降 完全遮断
-          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>法令チェック</div>
+          {complianceWarnings.length > 0 ? (
+            <>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--warning)' }}>
+                {complianceWarnings.length}{' '}
+                <span style={{ fontSize: '0.875rem' }}>件の要確認</span>
+              </div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--warning)' }}>
+                安全側に判定した設定があります
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--success)' }}>
+                0 <span style={{ fontSize: '0.875rem' }}>件</span>
+              </div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--success)' }}>
+                年少者・母性保護 22時以降 遮断
+              </div>
+            </>
+          )}
         </div>
 
         <div>
@@ -122,7 +160,9 @@ export const RoiSummaryCard: React.FC<Props> = ({ summary, solveTimeMs }) => {
             {(solveTimeMs / 1000).toFixed(2)} <span style={{ fontSize: '0.875rem' }}>秒</span>
           </div>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-            CP-SAT 最適解確定
+            {summary.is_proven_optimal === false
+              ? 'CP-SAT 制限時間内の最良解'
+              : 'CP-SAT 最適解確定'}
           </div>
         </div>
       </div>

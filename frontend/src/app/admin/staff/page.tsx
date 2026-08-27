@@ -587,6 +587,7 @@ export default function StaffAdminPage() {
                 <input
                   type="text"
                   className="form-input"
+                  data-testid="input-staff-name"
                   value={formName}
                   onChange={(e) => handleNameChange(e.target.value)}
                   placeholder="例: 佐藤 健 (大2/キッチン)"
@@ -600,6 +601,7 @@ export default function StaffAdminPage() {
                   <input
                     type="text"
                     className="form-input"
+                    data-testid="input-staff-wage"
                     value={formHourlyWageInput}
                     onChange={(e) => setFormHourlyWageInput(e.target.value)}
                     placeholder="例: 1200"

@@ -3,7 +3,14 @@
 import React, { useEffect, useState } from 'react';
 import { ShiftOptimizeRequest, ShiftOptimizeResponse } from '@/lib/types';
 import { DEMO_IZAKAYA_DATA } from '@/lib/mock-data';
-import { loadSavedRequest, loadSavedResponse, saveRequest, saveResponse, saveConfirmedSnapshot } from '@/lib/storage';
+import {
+  loadSavedRequest,
+  loadSavedResponse,
+  saveRequest,
+  saveResponse,
+  saveConfirmedSnapshot,
+  hasSavedStore,
+} from '@/lib/storage';
 import { requestShiftOptimization } from '@/lib/api';
 import { AdminNavbar } from '@/components/navigation/AdminNavbar';
 import { RoiSummaryCard } from '@/components/summary/RoiSummaryCard';
@@ -14,6 +21,8 @@ import { ExportModal } from '@/components/schedule/ExportModal';
 import { LineImportModal } from '@/components/schedule/LineImportModal';
 import { checkTotalRequiredStaff, checkMissingRequiredRoles } from '@/lib/validation';
 import { generateHourlyRequirements, generateHourlyAvailabilities } from '@/lib/mock-data';
+import { StoreSetupPanel } from '@/components/store/StoreSetupPanel';
+import { ShareSubmitLink } from '@/components/store/ShareSubmitLink';
 
 export default function AdminPage() {
   const [requestData, setRequestData] = useState<ShiftOptimizeRequest>(DEMO_IZAKAYA_DATA);
@@ -25,6 +34,8 @@ export default function AdminPage() {
   const [isLineImportOpen, setIsLineImportOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'timeline' | 'monthly' | 'slots'>('timeline');
   const [currentDayOffset, setCurrentDayOffset] = useState(0);
+  const [isDemoData, setIsDemoData] = useState(false);
+  const [isSetupOpen, setIsSetupOpen] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -34,12 +45,19 @@ export default function AdminPage() {
   // マウント時に LocalStorage から復元
   useEffect(() => {
     const savedReq = loadSavedRequest();
+    // 自店データを保存していなければ、いま見えているのはデモデータ
+    setIsDemoData(!hasSavedStore());
     // 1時間単位のデータが存在しない場合はモックデータで補完
     if (!savedReq.hourly_requirements || savedReq.hourly_requirements.length === 0) {
       savedReq.hourly_requirements = generateHourlyRequirements(savedReq.period.days);
     }
+    // 希望データは実在するスタッフに対してのみ生成する。
+    // 従来は emp_01〜emp_15 決め打ちのモックを注入していたため、
+    // 自店スタッフに入れ替えた後も存在しないIDの希望が生成され続けていた。
     if (!savedReq.hourly_availabilities || savedReq.hourly_availabilities.length === 0) {
-      savedReq.hourly_availabilities = generateHourlyAvailabilities(savedReq.period.days);
+      savedReq.hourly_availabilities = generateHourlyAvailabilities(
+        savedReq.period.days
+      ).filter((a) => savedReq.staff_members.some((st) => st.id === a.staff_id));
     }
     setRequestData(savedReq);
     const savedRes = loadSavedResponse();
@@ -175,9 +193,29 @@ export default function AdminPage() {
     showToast(`${staff?.name || ''} の勤務時間を更新しました (${startTime}〜${endTime} / ${netHours}h)`);
   };
 
+  const applyRequestChange = (next: ShiftOptimizeRequest) => {
+    setRequestData(next);
+    saveRequest(next);
+  };
+
   return (
     <main className="container" style={{ paddingBottom: '3rem' }}>
       <AdminNavbar />
+
+      <StoreSetupPanel
+        request={requestData}
+        isDemoData={isDemoData}
+        isOpen={isSetupOpen}
+        onToggle={() => setIsSetupOpen((v) => !v)}
+        onChange={applyRequestChange}
+        onFreshStart={(fresh) => {
+          setRequestData(fresh);
+          setResponse(null);
+          setIsDemoData(false);
+          setIsSetupOpen(false);
+        }}
+        onNotify={showToast}
+      />
 
       <header
         style={{
@@ -348,6 +386,10 @@ export default function AdminPage() {
       )}
 
       {/* 経営改善サマリーカード */}
+      <div style={{ marginBottom: '1.5rem' }}>
+        <ShareSubmitLink request={requestData} onNotify={showToast} />
+      </div>
+
       <RoiSummaryCard summary={response?.summary || null} solveTimeMs={response?.solve_time_ms || 0} />
 
       {/* エクスポートボタン (LINE / CSV / JSONバックアップ) */}

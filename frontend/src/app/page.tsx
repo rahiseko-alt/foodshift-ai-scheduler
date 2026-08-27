@@ -112,6 +112,23 @@ export default function HomePage() {
             <div>LINE / CSV出力</div>
           </div>
         </div>
+
+        <div
+          style={{
+            marginTop: '1.5rem',
+            paddingTop: '1rem',
+            borderTop: '1px solid var(--border)',
+            textAlign: 'center',
+            fontSize: '0.75rem',
+            color: 'var(--text-muted)',
+          }}
+        >
+          <Link href="/privacy" data-testid="link-privacy">
+            個人情報の取り扱い
+          </Link>
+          <span style={{ margin: '0 0.5rem' }}>·</span>
+          <span>データは端末内に保存され、サーバーには保存されません</span>
+        </div>
       </div>
     </main>
   );

@@ -50,17 +50,36 @@ export const ExportModal: React.FC<Props> = ({ request, response, onRestore }) =
     lines.push(`【FoodShift 確定シフト】`);
     lines.push(`期間: ${request.period.start_date} から ${request.period.days}日間\n`);
 
+    // 1時間スロット経路（管理画面からの最適化は常にこちら）では
+    // ソルバーのレスポンス自体の schedule は空で、割当は assigned_shifts に入る。
+    // schedule だけを走査していたため、配布用テキストにシフト行が
+    // 1行も出力されないまま「人件費」と「希望充足率」だけが載っていた。
+    //
+    // その後 `normalizeOptimizeResponse` が schedule を補完するようになったため、
+    // 両方を無条件に出力すると**同じ勤務が二重に載る**（実測: 割当108件に対し150行）。
+    // 配布文は「誰が何時から何時まで」が読めれば良く、実時刻を持つ
+    // assigned_shifts のほうが情報量が多いので、そちらを優先し、
+    // 無い場合（シフト枠のみのレスポンス）に限って枠単位の表記へ落とす。
     for (let d = 0; d < request.period.days; d++) {
       const daySlots = response.schedule.filter((s) => s.day_offset === d);
-      const dateStr = daySlots[0]?.date || `Day ${d + 1}`;
+      const dayShifts = (response.assigned_shifts ?? []).filter((s) => s.day_offset === d);
+      const dateStr = dayShifts[0]?.date || daySlots[0]?.date || `Day ${d + 1}`;
       lines.push(`${dateStr}`);
 
-      for (const slot of daySlots) {
-        const shiftObj = request.shifts.find((s) => s.id === slot.shift_id);
-        const shiftName = shiftObj ? shiftObj.name : slot.shift_id;
-        const timeRange = shiftObj ? `${shiftObj.start}-${shiftObj.end}` : '';
-        const names = slot.assigned_staff.map((s) => s.name).join(', ');
-        lines.push(`  ・${shiftName} (${timeRange}): ${names || '割当なし'}`);
+      if (dayShifts.length > 0) {
+        for (const shift of dayShifts) {
+          lines.push(`  ・${shift.start_time}-${shift.end_time}: ${shift.name || shift.staff_id}`);
+        }
+      } else if (daySlots.length > 0) {
+        for (const slot of daySlots) {
+          const shiftObj = request.shifts.find((s) => s.id === slot.shift_id);
+          const shiftName = shiftObj ? shiftObj.name : slot.shift_id;
+          const timeRange = shiftObj ? `${shiftObj.start}-${shiftObj.end}` : '';
+          const names = slot.assigned_staff.map((s) => s.name).join(', ');
+          lines.push(`  ・${shiftName} (${timeRange}): ${names || '割当なし'}`);
+        }
+      } else {
+        lines.push('  ・割当なし');
       }
       lines.push('');
     }

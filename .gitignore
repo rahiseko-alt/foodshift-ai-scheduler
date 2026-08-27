@@ -40,3 +40,6 @@ playwright/.cache/
 # OS
 .DS_Store
 Thumbs.db
+
+# ビルド生成物（TypeScript のインクリメンタルビルド情報）
+frontend/tsconfig.tsbuildinfo

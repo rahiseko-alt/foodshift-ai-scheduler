@@ -2,7 +2,11 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
-  timeout: 30000,
+  // 画面をまたぐ一連の操作（希望提出→コード生成→取込→検証、バックアップ→復元 など）は
+  // dev サーバーのルート初回コンパイルを含むため、実測で30秒ぎりぎりに達していた。
+  // その結果、中身とは無関係に「たまたま遅かった回」だけが赤くなる。
+  // アサーションを削って軽くするのではなく、時間の枠を現実に合わせる。
+  timeout: 60000,
   expect: {
     timeout: 5000,
   },

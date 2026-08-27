@@ -7,6 +7,24 @@ import { loadSavedRequest, loadSavedResponse, saveRequest } from '@/lib/storage'
 import { getDateInfo } from '@/lib/date-utils';
 import { OfflineBanner } from '@/components/navigation/OfflineBanner';
 import { encodeSubmissionCode } from '@/lib/line-codec';
+import { decodeRoster, readRosterFragment } from '@/lib/roster-share';
+
+/**
+ * 希望入力のキー `<day_offset>_<shift_id>` を分解する。
+ *
+ * `key.split('_')` で分割していたため、`late_night` のように
+ * アンダースコアを含むシフト枠IDだと shift_id が `late` に化けていた。
+ * 化けた枠は保存データにもLINE提出コードにも「その枠の希望」として
+ * 残らず、スタッフが「不可」にしたはずの深夜枠が黙って消えていた。
+ * 最初のアンダースコアだけを区切りとして扱う。
+ */
+function parseSlotKey(key: string): { dayOffset: number; shiftId: string } {
+  const sep = key.indexOf('_');
+  return {
+    dayOffset: parseInt(key.slice(0, sep), 10),
+    shiftId: key.slice(sep + 1),
+  };
+}
 
 export default function SubmitPage() {
   const [requestData, setRequestData] = useState<ShiftOptimizeRequest | null>(null);
@@ -14,15 +32,52 @@ export default function SubmitPage() {
   const [selectedStaffId, setSelectedStaffId] = useState<string>('');
   const [availabilities, setAvailabilities] = useState<Record<string, AvailabilityStatus>>({});
   const [submitted, setSubmitted] = useState(false);
+  const [rosterLoaded, setRosterLoaded] = useState(false);
+  const [rosterError, setRosterError] = useState(false);
 
   useEffect(() => {
-    const req = loadSavedRequest();
-    setRequestData(req);
-    if (req.staff_members.length > 0) {
-      setSelectedStaffId(req.staff_members[0].id);
-    }
-    const res = loadSavedResponse();
-    setResponse(res);
+    // 店長から配られた「提出リンク」に名簿が載っていれば、それを取り込む。
+    //
+    // バックエンドは店舗データを保存しないため、リンクを開く以外に
+    // スタッフの端末が自店の名簿を知る手段が無い（従来はサンプルの15人しか
+    // 表示されず、自分の名前が絶対に出てこなかった）。
+    const applyRoster = async () => {
+      const fragment =
+        typeof window !== 'undefined' ? readRosterFragment(window.location.hash) : null;
+
+      if (fragment) {
+        const roster = await decodeRoster(fragment);
+        if (roster) {
+          const base = loadSavedRequest();
+          const merged: ShiftOptimizeRequest = {
+            ...base,
+            store_name: roster.store_name,
+            period: roster.period,
+            staff_members: roster.staff_members,
+            shifts: roster.shifts,
+            // 別の店舗のリンクを開いた場合に前の店の希望が混ざらないようにする
+            availabilities: [],
+          };
+          saveRequest(merged);
+          setRosterLoaded(true);
+          setRequestData(merged);
+          setSelectedStaffId(merged.staff_members[0]?.id || '');
+          setResponse(loadSavedResponse());
+          // 名前の一覧がURLに残り続けないよう、取り込み後は消す
+          window.history.replaceState(null, '', window.location.pathname);
+          return;
+        }
+        setRosterError(true);
+      }
+
+      const req = loadSavedRequest();
+      setRequestData(req);
+      if (req.staff_members.length > 0) {
+        setSelectedStaffId(req.staff_members[0].id);
+      }
+      setResponse(loadSavedResponse());
+    };
+    void applyRoster();
   }, []);
 
   // スタッフ切り替え時に既存の希望データを読み込み
@@ -68,10 +123,10 @@ export default function SubmitPage() {
     );
 
     const newStaffAvail = Object.entries(availabilities).map(([key, status]) => {
-      const [dStr, shiftId] = key.split('_');
+      const { dayOffset, shiftId } = parseSlotKey(key);
       return {
         staff_id: selectedStaffId,
-        day_offset: parseInt(dStr, 10),
+        day_offset: dayOffset,
         shift_id: shiftId,
         status,
       };
@@ -81,16 +136,51 @@ export default function SubmitPage() {
       (a) => a.staff_id !== selectedStaffId
     );
 
-    // 日ごとの希望時間帯（未成年者は22時以降制限）
+    // 日ごとの勤務可能時間帯を、実際にタップされた内容から組み立てる。
+    //
+    // 従来はタップ内容を一切見ず
+    //   is_available: true, is_preferred: d % 3 === 0
+    // という固定式で生成していた。管理画面の最適化は
+    // hourly_availabilities を読む経路に到達するため、
+    // **スタッフが「不可」と提出した日にもシフトが入れられていた**
+    // （希望も「3日ごと」という入力と無関係な値になっていた）。
+    const isMinor = currentStaff?.is_minor || false;
+    const hourOf = (time: string) => {
+      const [h, m] = time.split(':').map(Number);
+      return { floor: Math.floor(h + (m || 0) / 60), ceil: Math.ceil(h + (m || 0) / 60) };
+    };
+
     const newHourlyAvail = Array.from({ length: days }, (_, d) => {
-      const isMinor = currentStaff?.is_minor || false;
+      // その日に「不可」以外を選んだ枠だけが勤務可能時間の候補になる
+      const openShifts = requestData.shifts.filter(
+        (sh) => (availabilities[`${d}_${sh.id}`] || 'available') !== 'unavailable'
+      );
+      const wants = requestData.shifts.filter(
+        (sh) => availabilities[`${d}_${sh.id}`] === 'want'
+      );
+
+      if (openShifts.length === 0) {
+        // 全枠を「不可」にした日は終日不可として扱う
+        return {
+          staff_id: selectedStaffId,
+          day_offset: d,
+          available_from: 0,
+          available_to: 0,
+          is_available: false,
+          is_preferred: false,
+        };
+      }
+
+      const from = Math.min(...openShifts.map((sh) => hourOf(sh.start).floor));
+      const to = Math.max(...openShifts.map((sh) => hourOf(sh.end).ceil));
       return {
         staff_id: selectedStaffId,
         day_offset: d,
-        available_from: 10,
-        available_to: isMinor ? 22 : 24,
+        available_from: Math.max(0, Math.min(23, from)),
+        // 年少者は22時以降に入れないため、可能時間帯も22時で頭打ちにする
+        available_to: Math.max(1, Math.min(isMinor ? 22 : 24, to)),
         is_available: true,
-        is_preferred: d % 3 === 0,
+        is_preferred: wants.length > 0,
       };
     });
 
@@ -141,8 +231,14 @@ export default function SubmitPage() {
             期間: {requestData.period.start_date} から {days}日間
           </p>
         </div>
+        {/*
+          スタッフ画面の「ホーム」は入口ページへ戻す。
+          従来は /admin を指しており、スタッフがタップすると
+          全員の時給・年収が見える管理画面に入れてしまっていた
+          （認証が無いため実質アクセス制御ゼロだった）。
+        */}
         <Link
-          href="/admin"
+          href="/"
           data-testid="nav-home-btn"
           className="btn btn-secondary btn-sm"
           style={{ fontSize: '0.75rem', fontWeight: 700 }}
@@ -150,6 +246,43 @@ export default function SubmitPage() {
           ホーム
         </Link>
       </header>
+
+      {rosterLoaded && (
+        <div
+          data-testid="roster-loaded-banner"
+          className="card"
+          style={{
+            marginBottom: '1rem',
+            padding: '0.75rem 1rem',
+            backgroundColor: 'var(--success-bg)',
+            color: 'var(--success)',
+            border: '1px solid var(--success-border)',
+            fontWeight: 600,
+            fontSize: '0.85rem',
+          }}
+        >
+          {requestData.store_name || 'お店'} の名簿を読み込みました（
+          {requestData.staff_members.length}名）。自分の名前を選んでください。
+        </div>
+      )}
+
+      {rosterError && (
+        <div
+          data-testid="roster-error-banner"
+          className="card"
+          style={{
+            marginBottom: '1rem',
+            padding: '0.75rem 1rem',
+            backgroundColor: 'var(--danger-bg)',
+            color: 'var(--danger)',
+            border: '1px solid var(--danger-border)',
+            fontWeight: 600,
+            fontSize: '0.85rem',
+          }}
+        >
+          リンクが壊れているため名簿を読み込めませんでした。店長にリンクの再送を依頼してください。
+        </div>
+      )}
 
       {/* スタッフ選択 */}
       <div className="card" style={{ marginBottom: '1rem', padding: '1rem' }}>
@@ -424,10 +557,10 @@ export default function SubmitPage() {
                   days,
                   shift_ids: shifts.map((s) => s.id),
                   availabilities: Object.entries(availabilities).map(([key, status]) => {
-                    const [dStr, shiftId] = key.split('_');
+                    const { dayOffset, shiftId } = parseSlotKey(key);
                     return {
                       staff_id: selectedStaffId,
-                      day_offset: parseInt(dStr, 10),
+                      day_offset: dayOffset,
                       shift_id: shiftId,
                       status,
                     };
@@ -446,10 +579,10 @@ export default function SubmitPage() {
                       days,
                       shift_ids: shifts.map((s) => s.id),
                       availabilities: Object.entries(availabilities).map(([key, status]) => {
-                        const [dStr, shiftId] = key.split('_');
+                        const { dayOffset, shiftId } = parseSlotKey(key);
                         return {
                           staff_id: selectedStaffId,
-                          day_offset: parseInt(dStr, 10),
+                          day_offset: dayOffset,
                           shift_id: shiftId,
                           status,
                         };

@@ -122,6 +122,63 @@ function updateStorageMeta(storeId: string = getCurrentStoreId()): StorageMeta {
 }
 
 /**
+ * 自店のデータを保存済みか（＝いま画面に出ているのがデモではないか）を返す。
+ *
+ * 保存キーが無い場合 `loadSavedRequest` はデモデータを返す。
+ * 初見の店長には「自分が入力した覚えのない15人」が表示されるため、
+ * デモであることを画面上で明示できるようにこの判定を公開する。
+ */
+export function hasSavedStore(storeId: string = getCurrentStoreId()): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    if (localStorage.getItem(getRequestKey(storeId))) return true;
+    if (storeId === DEFAULT_STORE_ID && localStorage.getItem(LEGACY_STORAGE_KEY_REQUEST)) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
+/**
+ * デモデータを捨てて、自店のデータをゼロから作り始める。
+ *
+ * 従来は逆方向（デモに戻す）しか無く、自店を立ち上げるには
+ * デモの15人を1人ずつ確認ダイアログ付きで削除するしかなかった。
+ */
+export function startFreshStore(
+  storeName: string,
+  startDate: string,
+  days: number,
+  storeId: string = getCurrentStoreId()
+): ShiftOptimizeRequest {
+  const fresh: ShiftOptimizeRequest = {
+    store_name: storeName,
+    period: { start_date: startDate, days },
+    shifts: [],
+    staff_members: [],
+    requirements: [],
+    availabilities: [],
+    hourly_requirements: [],
+    hourly_availabilities: [],
+    fixed_assignments: [],
+  };
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.removeItem(getResponseKey(storeId));
+      if (storeId === DEFAULT_STORE_ID) {
+        localStorage.removeItem(LEGACY_STORAGE_KEY_RESPONSE);
+      }
+    } catch (e) {
+      console.warn('Failed to clear previous response', e);
+    }
+  }
+  saveRequest(fresh, storeId);
+  return fresh;
+}
+
+/**
  * リクエストデータの読み込み (同期・LocalStorage 即時復元 + IndexedDB フォールバック)
  */
 export function loadSavedRequest(storeId: string = getCurrentStoreId()): ShiftOptimizeRequest {

@@ -1,11 +1,37 @@
+from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
+
+# 生年月日として受理する年齢の上限（これを超える値は入力ミスとみなす）
+MAX_PLAUSIBLE_AGE_YEARS = 120
+
+
+def parse_iso_date(value: str, field_label: str) -> date:
+    """YYYY-MM-DD 文字列を暦として妥当な日付に変換する。
+
+    正規表現パターンは `2010-13-01` や `2010-02-30` のような
+    「形式は正しいが暦として存在しない日付」を通してしまうため、
+    実際に strptime を通して妥当性を検証する。
+    """
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        raise ValueError(
+            f"{field_label} '{value}' は暦として存在しない日付です。"
+            "YYYY-MM-DD 形式で実在する日付を指定してください。"
+        ) from None
 
 
 class PeriodSchema(BaseModel):
     start_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$", description="開始日 (YYYY-MM-DD)")
     days: int = Field(..., ge=1, le=31, description="計算日数 (最大31日)")
+
+    @field_validator("start_date")
+    @classmethod
+    def validate_start_date_is_real(cls, v: str) -> str:
+        parse_iso_date(v, "開始日(start_date)")
+        return v
 
 
 class ShiftSchema(BaseModel):
@@ -63,14 +89,54 @@ class ShiftSchema(BaseModel):
 
 
 class StaffMemberSchema(BaseModel):
+    # フロントエンドは歴史的に is_student_visa / is_pregnant_or_nursing という
+    # 別名で送信しており、Pydantic の既定（extra="ignore"）により
+    # 留学生28時間制限と母性保護深夜業禁止が本番経路で一切発火していなかった。
+    # LocalStorage に保存済みの既存データを壊さないため、
+    # 正式名と旧名の双方を受理する（AliasChoices は先頭を優先）。
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str = Field(..., min_length=1, max_length=50, pattern=r"^[a-zA-Z0-9_\-]+$")
     name: str = Field(..., min_length=1, max_length=50)
     is_minor: bool = Field(default=False, description="満18歳未満フラグ")
-    is_foreign_student: bool = Field(default=False, description="留学生フラグ（週28時間制限）")
-    is_maternity_protection: bool = Field(default=False, description="母性保護フラグ（深夜業制限）")
+    is_foreign_student: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("is_foreign_student", "is_student_visa"),
+        description="留学生フラグ（週28時間制限）",
+    )
+    is_maternity_protection: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("is_maternity_protection", "is_pregnant_or_nursing"),
+        description="母性保護フラグ（深夜業制限）",
+    )
+    # 書式パターンは後段の `validate_birth_date_is_real` (strptime) との多層防御。
+    # パターンだけを外しても strptime が同じ値を弾くため、
+    # 変異テストで殺せる入力が実質存在しない（SCH-BDFORMAT が生存）。
+    # 差が出るのは "2010-1-1" のようなゼロ詰め無し表記だけで、
+    # これは正しい日付として解釈されるため実害が無い。
+    # よってここを狙ったテストは書かず、重複した防御として意図的に残す。
     birth_date: str | None = Field(
         default=None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="生年月日 (YYYY-MM-DD)"
     )
+
+    @field_validator("birth_date")
+    @classmethod
+    def validate_birth_date_is_real(cls, v: str | None) -> str | None:
+        """生年月日の暦妥当性を検証する（年少者判定の誤りを入口で防ぐ）。
+
+        年少者保護（労基法第60条）の判定根拠となる値のため、
+        解釈不能な日付を黙って受理してはならない。
+        """
+        if v is None:
+            return v
+        parsed = parse_iso_date(v, "生年月日(birth_date)")
+        today = date.today()
+        if parsed > today:
+            raise ValueError(f"生年月日(birth_date) '{v}' が未来の日付です。")
+        if parsed.year < today.year - MAX_PLAUSIBLE_AGE_YEARS:
+            raise ValueError(f"生年月日(birth_date) '{v}' が現実的な範囲を超えています。")
+        return v
+
     roles: list[str] = Field(..., min_length=1, max_length=10, description="保有ロール")
     hourly_wage: int = Field(..., ge=800, le=10000, description="時給(円)")
     max_weekly_hours: float = Field(default=40.0, ge=0.0, le=168.0, description="週間最大労働時間")
@@ -78,9 +144,15 @@ class StaffMemberSchema(BaseModel):
         default=30.0, ge=0.0, le=168.0, description="週間目標労働時間"
     )
     max_consecutive_days: int = Field(default=5, ge=1, le=7, description="最大連続勤務日数")
-    ng_staff_ids: list[str] = Field(default_factory=list, description="同時勤務NGスタッフIDリスト")
+    # 長さ上限が無いと、1MBのペイロード上限内でも巨大な配列を送れてしまう。
+    # NGペア・優先ペアの制約構築は O(スタッフ数^2 × シフト数 × 日数) のため、
+    # サーバーを長時間占有させられる。スタッフ数の上限(50)を超える指定は
+    # 意味を持たないので同じ値で頭打ちにする。
+    ng_staff_ids: list[str] = Field(
+        default_factory=list, max_length=50, description="同時勤務NGスタッフIDリスト"
+    )
     preferred_partner_ids: list[str] = Field(
-        default_factory=list, description="優先ペアスタッフIDリスト"
+        default_factory=list, max_length=50, description="優先ペアスタッフIDリスト"
     )
     min_days_per_period: int = Field(default=0, ge=0, description="期間内最小出勤日数")
     max_days_per_period: int = Field(default=31, ge=0, le=31, description="期間内最大出勤日数")
@@ -219,6 +291,14 @@ class ScheduleSummarySchema(BaseModel):
     unfilled_requirements: list[UnfilledRequirementSchema] = Field(default_factory=list)
     bottleneck_constraints: list[str] = Field(
         default_factory=list, description="Infeasible時等の制約ボトルネック分析"
+    )
+    compliance_warnings: list[str] = Field(
+        default_factory=list,
+        description="法令判定に関する警告（安全側フォールバックが作動した場合等）",
+    )
+    is_proven_optimal: bool = Field(
+        default=True,
+        description="CP-SATが最適性を証明できたか（制限時間内に打ち切った解はFalse）",
     )
 
 
