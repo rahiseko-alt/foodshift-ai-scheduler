@@ -329,3 +329,50 @@ def test_calendar_invalid_start_date_rejected():
 def test_valid_start_date_accepted():
     """実在する開始日は受理される（2028年は閏年）。"""
     assert PeriodSchema(start_date="2028-02-29", days=7).start_date == "2028-02-29"
+
+
+def _pattern_error_fields(exc: pytest.ExceptionInfo[ValidationError]) -> set[str]:
+    """書式パターン違反として報告されたフィールド名を取り出す。
+
+    単に `pytest.raises(ValidationError)` で括ると、
+    `hours` と時刻の整合を見る `model_validator` が別の理由で例外を投げても
+    テストが緑になってしまい、**15分刻みの検証を一度も通らずに通過する**。
+    エラーの型とフィールドまで見て、狙った検証が発火したことを確定させる。
+    """
+    return {str(e["loc"][0]) for e in exc.value.errors() if e["type"] == "string_pattern_mismatch"}
+
+
+@pytest.mark.parametrize("bad_time", ["09:07", "09:01", "09:59", "09:20", "09:44"])
+def test_shift_times_must_be_on_the_quarter_hour(bad_time: str):
+    """シフト時刻は15分刻みでなければ拒否される。
+
+    この契約は飾りではなく、下流の複数箇所が依存している:
+    * タイムラインのドラッグ伸縮は 15分単位でスナップする
+      (`DailyTimelineView.tsx` の `Math.round(rawMinutes / 15) * 15`)
+    * `calculate_late_night_hours` は 0.25h 精度で深夜割増を算出する
+
+    刻みを任意の分に緩めても**全テストが緑のまま**だった
+    （変異テスト SCH-QUARTER が生存）。誰も刻みを見張っていなかった。
+    """
+    with pytest.raises(ValidationError) as exc:
+        ShiftSchema(id="s1", name="日勤", start=bad_time, end="17:00", hours=8.0, break_minutes=45)
+    assert "start" in _pattern_error_fields(exc), f"start={bad_time} が刻み違反として弾かれていない"
+
+    with pytest.raises(ValidationError) as exc:
+        ShiftSchema(id="s1", name="日勤", start="09:00", end=bad_time, hours=8.0, break_minutes=45)
+    assert "end" in _pattern_error_fields(exc), f"end={bad_time} が刻み違反として弾かれていない"
+
+
+@pytest.mark.parametrize(
+    ("good_time", "hours"),
+    [("09:00", 8.0), ("09:15", 7.75), ("09:30", 7.5), ("09:45", 7.25)],
+)
+def test_quarter_hour_shift_times_are_accepted(good_time: str, hours: float):
+    """対照群: 15分刻みちょうどの時刻は受理される。
+
+    これが無いと「全部の時刻を拒否する」壊れ方を上のテストが検出できない。
+    """
+    shift = ShiftSchema(
+        id="s1", name="日勤", start=good_time, end="17:00", hours=hours, break_minutes=45
+    )
+    assert shift.start == good_time

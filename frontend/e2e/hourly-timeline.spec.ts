@@ -188,15 +188,43 @@ test.describe('CUJ-11: 1-Hour Time-Slot Shift & Dual-View (Daily Timeline & Mont
     //    実際に右端を 18:00 までドラッグし、
     //    勤務時間・休憩時間（労基法第34条: 6時間超で45分）が
     //    再計算されて画面が変化することを確認する。
+    //
+    //    スマホ幅(393px)では、タイムライン行(728px)はビューポートの
+    //    はるか外側（実測 x=213〜941 / y=1870）に位置する。
+    //    スクロールせずに座標を計算すると、画面外の「何も無い場所」を
+    //    掴んでドラッグすることになり、**操作が一切届かないまま
+    //    「動かなかった」ことだけが分かる**という無意味な失敗になる。
+    //    掴む位置と離す位置の両方をビューポート内へ入れてから操作する。
     const slotsRow = page.locator('[data-testid="timeline-slots-emp_01"]');
-    const rowBox = await slotsRow.boundingBox();
+    await resizeEnd.scrollIntoViewIfNeeded();
+
+    // タイムラインは 9:00〜24:00 の 900分。18:00 は左端から 60%
+    const ratio18 = (18 * 60 - 9 * 60) / 900;
+    let rowBox = await slotsRow.boundingBox();
     expect(rowBox).not.toBeNull();
+
+    const viewportWidth = page.viewportSize()!.width;
+    const wantX = rowBox!.x + rowBox!.width * ratio18;
+    if (wantX > viewportWidth - 8) {
+      // 横スクロールコンテナを動かして 18:00 の位置を画面内に入れる
+      await page
+        .locator('[data-testid="daily-timeline-view"]')
+        .evaluate((el, dx) => {
+          el.scrollLeft += dx;
+        }, wantX - (viewportWidth - 8));
+      rowBox = await slotsRow.boundingBox();
+    }
+
     const handleBox = await resizeEnd.boundingBox();
     expect(handleBox).not.toBeNull();
 
-    // タイムラインは 9:00〜24:00 の 900分。18:00 は左端から 60%
-    const targetX = rowBox!.x + rowBox!.width * ((18 * 60 - 9 * 60) / 900);
+    const targetX = rowBox!.x + rowBox!.width * ratio18;
     const centerY = rowBox!.y + rowBox!.height / 2;
+    // 掴む位置・離す位置がどちらも画面内にあることを先に確定させる。
+    // ここが外れていると、以降のアサーションは「ドラッグが効かない」のか
+    // 「そもそも掴めていない」のかを区別できない。
+    expect(handleBox!.x, 'リサイズハンドルが画面内にあること').toBeGreaterThanOrEqual(0);
+    expect(targetX, 'ドラッグ先が画面内にあること').toBeLessThan(viewportWidth);
 
     await page.mouse.move(handleBox!.x + handleBox!.width / 2, centerY);
     await page.mouse.down();

@@ -98,12 +98,24 @@ test.describe('CUJ-7: LINE Submission & Manager Bulk Import Flow (0-Yen Stateles
     await expect(page.locator('span', { hasText: staffName as string }).last()).toBeVisible();
     const breakdown = page.getByText(/希望 \d+枠 \/ 可 \d+枠 \/ 不可 \d+枠/);
     await expect(breakdown).toBeVisible();
-    // 内訳は 14日 × 3枠 = 42枠。うちスタッフ画面で触れるのは直近7日分のみで、
+    // 内訳は 14日 × 3枠 = 42枠。うちスタッフ画面で触れるのは直近7日分（21枠）のみで、
     // 8日目以降（21枠）は提出範囲外のため「不可」として取り込まれる。
-    // ここを固定しておくと、日数のズレや状態の取り違えが数字に必ず出る。
+    //
+    // 提出された21枠のうち、このテストがタップするのは「希望」2枠だけ。
+    // 残り19枠は未タップ＝画面の凡例どおり「－ 通常（＝出勤可能）」として送信される。
+    // ここを 'unavailable' 既定にしていたため、**1枠だけタップして提出すると
+    // 触っていない残り全部が「不可」で送られる**という不具合があった
+    // （画面表示と送信内容が食い違っていた / line-codec.ts:113-120 で修正済み）。
+    // 既定値がまた反転したら、この3つの数字が必ず動く。
     await expect(breakdown).toContainText('希望 2枠');
-    await expect(breakdown).toContainText('可 1枠');
-    await expect(breakdown).toContainText('不可 39枠');
+    await expect(breakdown).toContainText('可 19枠');
+    await expect(breakdown).toContainText('不可 21枠');
+
+    // 総数の恒等式。3つの内訳が 14日×3枠 を過不足なく分割していること。
+    // 個別の数字だけだと、枠の取りこぼし（合計が42未満）を見逃す。
+    const breakdownText = (await breakdown.textContent()) ?? '';
+    const [want, ok, ng] = Array.from(breakdownText.matchAll(/(\d+)枠/g)).map((m) => Number(m[1]));
+    expect(want + ok + ng, `内訳の合計が 14日×3枠=42 にならない: ${breakdownText}`).toBe(42);
 
     await page.screenshot({ path: `${EVIDENCE}/line-sync-03-import-preview.png`, fullPage: true });
 
@@ -143,7 +155,11 @@ test.describe('CUJ-7: LINE Submission & Manager Bulk Import Flow (0-Yen Stateles
     expect(statusAt(3, 'dinner')).toBe('want');
     expect(statusAt(5, 'late_night')).toBe('available');
     expect(mine.filter((a) => a.status === 'want')).toHaveLength(2);
-    expect(mine.filter((a) => a.status === 'available')).toHaveLength(1);
+    // 未タップの枠は「通常（＝出勤可能）」として送られる（line-codec.ts:113-120）。
+    // 提出範囲の 7日×3枠=21枠 のうち、タップした「希望」2枠を除く 19枠。
+    expect(mine.filter((a) => a.status === 'available')).toHaveLength(19);
+    // 8日目以降の 21枠は提出範囲外なので「不可」で埋まる
+    expect(mine.filter((a) => a.status === 'unavailable')).toHaveLength(21);
 
     // スタッフ画面は直近7日分しか入力できないため、
     // 取り込み結果が8日目以降に現れたら日付がズレている

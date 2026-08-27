@@ -124,3 +124,24 @@ def test_unknown_shift_id_is_ignored():
     shifts = [_FakeShift("a", "10:00", "14:00")]
     requirements = [_FakeRequirement(0, "missing", 5)]
     assert build_hourly_requirements_from_shifts(shifts, requirements) == {}
+
+
+def test_day_crossing_is_decided_on_minutes_not_on_the_derived_hour():
+    """日跨ぎ判定は「分」で行う。時に落としてから判定してはならない。
+
+    `build_hourly_requirements_from_shifts` の docstring が明示している不変条件。
+    開始 09:45 / 終了 09:30 は「翌日の 09:30 まで」を意味する約23時間45分のシフトで、
+    ほぼ全時間帯に需要が乗るのが正しい。
+
+    判定を時単位（`end_hour <= start_hour`）に移すと、天井除算の結果
+    `ceil(570/60) == 10 > 9` となって日跨ぎと認識されず、
+    たった1スロットに縮んでしまう。
+
+    入力自体は退行的だが、**分で判定しているか時で判定しているかを
+    区別できる唯一の入力**であり、docstring が約束している不変条件そのもの。
+    （変異テスト T-OVERNIGHT がここを突いて生存していた）
+    """
+    shifts = [_FakeShift("s", "09:45", "09:30")]
+    requirements = [_FakeRequirement(0, "s", 1)]
+    hours = _hours_for(shifts, requirements)
+    assert len(hours) == 24, f"日跨ぎとして扱われず {len(hours)} スロットに縮んでいる: {hours}"

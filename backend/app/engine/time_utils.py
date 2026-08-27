@@ -33,7 +33,14 @@ def build_hourly_requirements_from_shifts(shifts, requirements) -> dict[tuple[in
             end_min += 24 * 60
         start_hour = start_min // 60
         end_hour = -(-end_min // 60)  # 天井除算: 端数の時間帯も対象に含める
-        # 1時間未満のシフトでも必ず1スロットは確保する
+        # 1時間未満のシフトでも必ず1スロットは確保する。
+        #
+        # 注: 直前で `end_min <= start_min` なら 24時間を加算しているため
+        # 常に `end_min > start_min` であり、天井除算の結果は必ず
+        # `start_hour + 1` 以上になる。つまりこの max() は現状**到達不能**で、
+        # 変異テストで消しても落ちるテストが存在しない（T-MINSLOT が生存）。
+        # 上の2行の順序が入れ替わった場合に備えた防御として残すが、
+        # 殺せる入力が無い以上ここを狙ったテストは書かない。
         end_hour = max(end_hour, start_hour + 1)
         for h in range(start_hour, end_hour):
             key = (req.day_offset, h % 24)

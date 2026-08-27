@@ -107,10 +107,15 @@ export default function DailyTimelineView({
   });
 
   // 15分刻みスナップによるドラッグ伸縮
+  //
+  // mousemove / mouseup で実装していたため、**スマートフォンでは
+  // リサイズハンドルが完全に無反応**だった（指でつまんでも何も起きない）。
+  // 店長がスマホからシフトを微調整する前提の製品なので実害がある。
+  // Pointer Events はマウス・タッチ・ペンを1系統で扱えるため、これに統一する。
   useEffect(() => {
     if (!resizing) return;
 
-    const handleMouseMove = (e: MouseEvent) => {
+    const handlePointerMove = (e: PointerEvent) => {
       const rowElem = document.querySelector(`[data-testid="timeline-slots-${resizing.staffId}"]`);
       if (!rowElem) return;
 
@@ -152,16 +157,20 @@ export default function DailyTimelineView({
       }
     };
 
-    const handleMouseUp = () => {
+    const handlePointerUp = () => {
       setResizing(null);
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    // 指を画面外へ滑らせた場合など、ブラウザがドラッグを打ち切ったときも解除する。
+    // これが無いと掴んだままの状態が残り、以降のタップで勝手に時刻が動く。
+    window.addEventListener('pointercancel', handlePointerUp);
 
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
     };
   }, [resizing, currentDayOffset, shiftMap, onUpdateShiftTime]);
 
@@ -538,7 +547,7 @@ export default function DailyTimelineView({
                       {/* ② 左端リサイズハンドル (15分単位) */}
                       <div
                         data-testid={`resize-start-${staff.id}`}
-                        onMouseDown={(e) => {
+                        onPointerDown={(e) => {
                           e.stopPropagation();
                           setResizing({
                             staffId: staff.id,
@@ -551,6 +560,8 @@ export default function DailyTimelineView({
                           width: '12px',
                           height: '100%',
                           cursor: 'ew-resize',
+                          // タッチ端末でブラウザに横スクロールとして横取りされるのを防ぐ
+                          touchAction: 'none',
                           backgroundColor: 'rgba(255, 255, 255, 0.35)',
                           borderTopLeftRadius: '6px',
                           borderBottomLeftRadius: '6px',
@@ -592,7 +603,7 @@ export default function DailyTimelineView({
                       {/* ② 右端リサイズハンドル (15分単位) */}
                       <div
                         data-testid={`resize-end-${staff.id}`}
-                        onMouseDown={(e) => {
+                        onPointerDown={(e) => {
                           e.stopPropagation();
                           setResizing({
                             staffId: staff.id,
@@ -605,6 +616,8 @@ export default function DailyTimelineView({
                           width: '12px',
                           height: '100%',
                           cursor: 'ew-resize',
+                          // タッチ端末でブラウザに横スクロールとして横取りされるのを防ぐ
+                          touchAction: 'none',
                           backgroundColor: 'rgba(255, 255, 255, 0.35)',
                           borderTopRightRadius: '6px',
                           borderBottomRightRadius: '6px',

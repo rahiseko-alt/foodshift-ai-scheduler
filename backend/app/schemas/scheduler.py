@@ -109,6 +109,12 @@ class StaffMemberSchema(BaseModel):
         validation_alias=AliasChoices("is_maternity_protection", "is_pregnant_or_nursing"),
         description="母性保護フラグ（深夜業制限）",
     )
+    # 書式パターンは後段の `validate_birth_date_is_real` (strptime) との多層防御。
+    # パターンだけを外しても strptime が同じ値を弾くため、
+    # 変異テストで殺せる入力が実質存在しない（SCH-BDFORMAT が生存）。
+    # 差が出るのは "2010-1-1" のようなゼロ詰め無し表記だけで、
+    # これは正しい日付として解釈されるため実害が無い。
+    # よってここを狙ったテストは書かず、重複した防御として意図的に残す。
     birth_date: str | None = Field(
         default=None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="生年月日 (YYYY-MM-DD)"
     )
